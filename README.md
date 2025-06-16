@@ -29,23 +29,27 @@ This project follows [the step-by-step tutorial](https://github.com/den-vasyliev
 
 ## Architecture
 
-```txt
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   CLI Client    │    │  HTTP Server    │    │  K8s API Server │
-│                 │    │                 │    │                 │
-│ • Cobra CLI     │───▶│ • FastHTTP      │───▶│ • Deployments   │
-│ • Zerolog       │    │ • JSON API      │    │ • Custom CRDs   │
-│ • pflag         │    │ • Swagger UI    │    │ • Events        │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │                        │
-                                ▼                        ▼
-                       ┌──────────────────┐    ┌─────────────────┐
-                       │   Controller     │    │    Informers    │
-                       │                  │    │                 │
-                       │ • Reconcile      │◀───│ • Watch Events  │
-                       │ • Leader Election│    │ • Cache         │
-                       │ • Metrics        │    │ • Work Queue    │
-                       └──────────────────┘    └─────────────────┘
+```mermaid
+C4Container
+    title Kubernetes Controller Architecture
+
+    Person(user, "DevOps Engineer", "Uses CLI")
+
+    System_Boundary(app, "Controller Application") {
+        Container(cli, "CLI Client", "Go, Cobra", "Command line interface")
+        Container(server, "HTTP Server", "Go, FastHTTP", "REST API and UI")
+        Container(controller, "Controller", "Go, controller-runtime", "Reconciliation logic")
+        Container(informers, "Informers", "Go, client-go", "Watch and cache")
+    }
+
+    System_Ext(k8s, "Kubernetes API", "Manages cluster resources")
+
+    Rel(user, cli, "Uses")
+    Rel(cli, server, "Commands")
+    Rel(server, k8s, "API calls")
+    Rel(k8s, informers, "Events")
+    Rel(informers, controller, "Cached data")
+    Rel(controller, k8s, "Reconcile")
 ```
 
 ## Quick Start
