@@ -14,9 +14,9 @@ var rootCmd = &cobra.Command{
 	Use:   "k8s-controller",
 	Short: "A production-grade Golang Kubernetes controller",
 	Long: `This project is a step-by-step tutorial for DevOps and SRE engineers
-	to learn about building Golang applications and Kubernetes controllers.
-	Each step is implemented as a feature branch and includes
-	a README section with explanations and command history
+to learn about building Golang applications and Kubernetes controllers.
+Each step is implemented as a feature branch and includes
+a README section with explanations and command history
 
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
