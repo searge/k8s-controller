@@ -1,0 +1,83 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  go-version: 1.23
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  find-test-dirs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find Test Dirs
+        id: set-dirs
+        run: |
+          dirs=$(find . -type d -not -path '.' \
+            -exec sh -c 'ls "{}"/*.go 2>/dev/null \
+            | grep -q "_test.go$"' \; -print \
+            | jq --raw-input --slurp 'split("\n")[:-1]')
+          echo "dirs=$(echo $dirs)" >> $GITHUB_OUTPUT
+    outputs:
+        dirs: ${{ steps.set-dirs.outputs.dirs }}
+
+  test:
+    runs-on: ubuntu-24.04
+    needs: find-test-dirs
+    strategy:
+      matrix:
+        dir: ${{fromJson(needs.find-test-dirs.outputs.dirs)}}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.go-version }}
+          cache-dependency-path: "./go.mod"
+      - name: Test
+        run: go test -v ${{ matrix.dir }}
+
+  coverage:
+    runs-on: ubuntu-24.04
+    needs: find-test-dirs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # default fetch-depth is insufficent to find previous coverage notes
+          fetch-depth: 10
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.go-version }}
+          cache-dependency-path: "./go.mod"
+      - name: Go Coverage Report
+        id: coverage
+        uses: gwatts/go-coverage-action@v2
+        with:
+          coverage-threshold: 80
+          cover-pkg: ./...
+  build:
+    runs-on: ubuntu-24.04
+    needs: [test, coverage]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "./go.mod"
+          cache-dependency-path: "./go.mod"
+      - name: Build
+        run: go build -v ./...
