@@ -22,20 +22,20 @@ This guide helps you build a complete Kubernetes development environment from sc
 
 ```txt
 ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   kubectl   │───▶│  kube-apiserver │───▶│      etcd       │
+│   kubectl   │--->│  kube-apiserver │--->│      etcd       │
 └─────────────┘    └─────────────────┘    └─────────────────┘
                             │
                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 kube-controller-manager                     │
-│  • ReplicationController  • DeploymentController            │
-│  • ServiceController      • NodeController                  │
-│  • EndpointsController    • NamespaceController             │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│                 kube-controller-manager                   │
+│  • ReplicationController  • DeploymentController          │
+│  • ServiceController      • NodeController                │
+│  • EndpointsController    • NamespaceController           │
+└───────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ kube-sched  │    │     kubelet     │───▶│   containerd    │
+│ kube-sched  │    │     kubelet     │--->│   containerd    │
 │   uler      │    │                 │    │                 │
 └─────────────┘    └─────────────────┘    └─────────────────┘
 ```
