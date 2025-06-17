@@ -13,7 +13,7 @@ This guide helps you build a complete Kubernetes development environment from sc
 
 ## Prerequisites
 
-- Mac with Apple Silicon (M1/M2) or Intel processor
+- Fedora Linux or any other Linux distribution
 - Podman installed
 - Basic understanding of Kubernetes concepts
 - Terminal with sudo privileges
@@ -53,20 +53,95 @@ This guide helps you build a complete Kubernetes development environment from sc
 
 ## Step 1: Environment Setup
 
-### Initialize Podman Machine
+### Podman Machine Setup Guide for Fedora 41
+
+> [!IMPORTANT]
+> Setting up Podman machines on Fedora 41 can be tricky due to missing dependencies.
+> If you're getting errors like {- "could not find gvproxy" -} or {- "failed to find virtiofsd" -},
+> here's the complete fix.
 
 ```bash
-# Initialize and start Podman machine
+# Remove any existing Podman installation and reinstall with all dependencies:
+sudo dnf remove podman &&
+  sudo dnf install @container-management netavark gvisor-tap-vsock virtiofsd
+```
+
+The key issue is that virtiofsd is installed in `/usr/libexec/` but Podman looks for it
+in `$PATH`, so create a symlink:
+
+```bash
+# Create a symlink so Podman can find virtiofsd
+sudo ln -s /usr/libexec/virtiofsd /usr/bin/virtiofsd
+```
+
+#### Clean Up Old Configuration
+
+If you had previous Podman installations:
+
+```bash
+# Remove old machines
+podman machine reset -f
+
+# Clean up old config (optional)
+rm -rf ~/.config/containers/
+```
+
+#### Create and Start Virtual Machine
+
+```bash
+# Create a new virtual machine
 podman machine init dev
+
+# Start the virtual machine
 podman machine start dev
+
+# Test SSH connection to the VM
 podman machine ssh dev
+```
+
+#### Verify Installation
+
+```bash
+# Check if machine is running
+podman machine list
+
+# Check Podman info
+podman info
+```
+
+#### Alternative: Machine Without Volume Mounting
+
+If you still have issues, try creating a machine without volume mounting:
+
+```bash
+podman machine rm dev --force
+podman machine init dev --volume-driver none
+podman machine start dev
+```
+
+This bypasses the virtiofsd requirement but still gives you a working container environment.
+
+#### Usage Examples
+
+```bash
+# Run a container
+podman run -it --rm fedora:latest /bin/bash
+
+# List running containers
+podman ps
+
+# Stop the virtual machine
+podman machine stop dev
+
+# Start the virtual machine
+podman machine start dev
 ```
 
 ### Install Basic Tools
 
 ```bash
 # For RPM-based systems
-sudo rpm-ostree install dnf zsh wget vim
+sudo rpm-ostree install zsh wget vim
 
 # For Debian-based systems
 sudo apt install zsh git make
