@@ -4,6 +4,53 @@ This guide helps you build a complete Kubernetes development environment from sc
 
 > 📚 **Based on**: [k8sdiy-kubernetes-control-plane](https://github.com/den-vasyliev/k8sdiy-kubernetes-control-plane) by Denis Vasiliev
 
+- [Kubernetes Control Plane Setup](#kubernetes-control-plane-setup)
+  - [Why Build Your Own Control Plane?](#why-build-your-own-control-plane)
+  - [Prerequisites](#prerequisites)
+  - [Architecture Overview](#architecture-overview)
+  - [Components We'll Install](#components-well-install)
+  - [Step 1: Environment Setup](#step-1-environment-setup)
+    - [Podman Machine Setup Guide for Fedora 41](#podman-machine-setup-guide-for-fedora-41)
+      - [Clean Up Old Configuration](#clean-up-old-configuration)
+      - [Create and Start Virtual Machine](#create-and-start-virtual-machine)
+      - [Verify Installation](#verify-installation)
+      - [Alternative: Machine Without Volume Mounting](#alternative-machine-without-volume-mounting)
+      - [Usage Examples](#usage-examples)
+    - [Install Basic Tools](#install-basic-tools)
+  - [Step 2: Download Kubernetes Binaries](#step-2-download-kubernetes-binaries)
+    - [Download Kubebuilder Tools](#download-kubebuilder-tools)
+    - [Download Additional Components](#download-additional-components)
+  - [Step 3: Generate Certificates and Tokens](#step-3-generate-certificates-and-tokens)
+  - [Step 4: Configure kubectl](#step-4-configure-kubectl)
+  - [Step 5: Start Core Components](#step-5-start-core-components)
+    - [Start etcd](#start-etcd)
+    - [Start kube-apiserver](#start-kube-apiserver)
+  - [Step 6: Install Container Runtime](#step-6-install-container-runtime)
+    - [Install containerd and CNI](#install-containerd-and-cni)
+    - [Configure CNI Network](#configure-cni-network)
+    - [Configure containerd](#configure-containerd)
+  - [Step 7: Start Control Plane Components](#step-7-start-control-plane-components)
+    - [Start kube-scheduler](#start-kube-scheduler)
+    - [Configure kubelet](#configure-kubelet)
+    - [Start kubelet](#start-kubelet)
+    - [Start kube-controller-manager](#start-kube-controller-manager)
+  - [Step 8: Verify Setup](#step-8-verify-setup)
+    - [Check Component Status](#check-component-status)
+    - [Test with a Pod](#test-with-a-pod)
+  - [Built-in Controllers Overview](#built-in-controllers-overview)
+    - [Core Controllers](#core-controllers)
+    - [System Controllers](#system-controllers)
+    - [Storage Controllers](#storage-controllers)
+    - [Cleanup Controllers](#cleanup-controllers)
+  - [Troubleshooting](#troubleshooting)
+    - [Common Issues](#common-issues)
+      - [etcd Connection Issues](#etcd-connection-issues)
+      - [kubelet Problems](#kubelet-problems)
+      - [API Server Issues](#api-server-issues)
+    - [Useful Commands](#useful-commands)
+  - [Next Steps](#next-steps)
+  - [References](#references)
+
 ## Why Build Your Own Control Plane?
 
 - **Deep Understanding**: Learn how K8s components interact
@@ -139,12 +186,39 @@ podman machine start dev
 
 ### Install Basic Tools
 
-```bash
-# For RPM-based systems
-sudo rpm-ostree install zsh wget vim
+By default you will get [Fedora CoreOS](https://fedoraproject.org/coreos/).
+It is an automatically updating, immutable operating system designed for running containerized workloads securely and at scale.
 
-# For Debian-based systems
-sudo apt install zsh git make
+```bash
+➜  ~ hostnamectl
+     Static hostname: (unset)
+  Transient hostname: localhost
+           Icon name: computer-vm
+             Chassis: vm 🖴
+          Machine ID: f12c5eecdXXX
+             Boot ID: 063b2a74bXXX
+      Virtualization: kvm
+    Operating System: Fedora CoreOS 41.20250215.3.0
+         CPE OS Name: cpe:/o:fedoraproject:fedora:41
+      OS Support End: Mon 2025-12-15
+OS Support Remaining: 5month 4w
+              Kernel: Linux 6.12.13-200.fc41.x86_64
+        Architecture: x86-64
+     Hardware Vendor: QEMU
+      Hardware Model: Standard PC _i440FX + PIIX, 1996_
+    Firmware Version: 1.16.3-3.fc41
+       Firmware Date: Tue 2014-04-01
+        Firmware Age: 11y 2month 2w 2d
+```
+
+> [!IMPORTANT]
+> That is, truly immutable. To make changes to the environment,
+> you need to rewrite the system image using rpm-ostree and reboot.
+
+But for the dev environment, we'll do some hacks:
+
+```bash
+sudo rpm-ostree install dnf zsh wget vim --allow-inactive
 
 # Install Oh My Zsh
 sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
@@ -159,20 +233,16 @@ curl -sS https://webi.sh/k9s | sh
 
 ```bash
 mkdir -p ./kubebuilder/bin && \
-curl -L https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-1.30.0-linux-amd64.tar.gz -o kubebuilder-tools.tar.gz && \
-tar -C ./kubebuilder --strip-components=1 -zvxf kubebuilder-tools.tar.gz && \
-rm kubebuilder-tools.tar.gz
+  curl -L https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-1.30.0-linux-amd64.tar.gz \
+    -o kubebuilder-tools.tar.gz && \
+  tar -C ./kubebuilder --strip-components=1 -zvxf kubebuilder-tools.tar.gz && \
+  rm kubebuilder-tools.tar.gz
 ```
 
 ### Download Additional Components
 
 ```bash
-# For ARM64 (M1/M2 Macs)
-curl -L "https://dl.k8s.io/v1.30.0/bin/linux/arm64/kubelet" -o kubebuilder/bin/kubelet
-curl -L "https://dl.k8s.io/v1.30.0/bin/linux/arm64/kube-controller-manager" -o kubebuilder/bin/kube-controller-manager
-curl -L "https://dl.k8s.io/v1.30.0/bin/linux/arm64/kube-scheduler" -o kubebuilder/bin/kube-scheduler
-
-# For AMD64 (Intel Macs)
+# For AMD64
 curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/kubelet" -o kubebuilder/bin/kubelet
 curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/kube-controller-manager" -o kubebuilder/bin/kube-controller-manager
 curl -L "https://dl.k8s.io/v1.30.0/bin/linux/amd64/kube-scheduler" -o kubebuilder/bin/kube-scheduler
@@ -261,10 +331,6 @@ sudo mkdir -p /opt/cni/bin
 sudo mkdir -p /etc/cni/net.d
 
 # Download containerd (choose your architecture)
-# For ARM64:
-wget https://github.com/containerd/containerd/releases/download/v2.1.2/containerd-static-2.1.2-linux-arm64.tar.gz
-sudo tar zxf containerd-static-2.1.2-linux-arm64.tar.gz -C /opt/cni/
-
 # For AMD64:
 wget https://github.com/containerd/containerd/releases/download/v2.1.2/containerd-static-2.1.2-linux-amd64.tar.gz
 sudo tar zxf containerd-static-2.1.2-linux-amd64.tar.gz -C /opt/cni/
@@ -274,10 +340,6 @@ sudo curl -L "https://github.com/opencontainers/runc/releases/download/v1.2.6/ru
 sudo chmod +x /opt/cni/bin/runc
 
 # Download CNI plugins (choose your architecture)
-# For ARM64:
-wget https://github.com/containernetworking/plugins/releases/download/v1.6.2/cni-plugins-linux-arm-v1.6.2.tgz
-sudo tar zxf cni-plugins-linux-arm-v1.6.2.tgz -C /opt/cni/bin/
-
 # For AMD64:
 wget https://github.com/containernetworking/plugins/releases/download/v1.6.2/cni-plugins-linux-amd64-v1.6.2.tgz
 sudo tar zxf cni-plugins-linux-amd64-v1.6.2.tgz -C /opt/cni/bin/
