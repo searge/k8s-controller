@@ -57,7 +57,7 @@ This guide helps you build a complete Kubernetes development environment from sc
 
 > [!IMPORTANT]
 > Setting up Podman machines on Fedora 41 can be tricky due to missing dependencies.
-> If you're getting errors like {- "could not find gvproxy" -} or {- "failed to find virtiofsd" -},
+> If you're getting errors like `"could not find gvproxy"` or `"failed to find virtiofsd"`,
 > here's the complete fix.
 
 ```bash
