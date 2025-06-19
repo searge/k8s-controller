@@ -22,3 +22,8 @@
     kubelet_dir: "/var/lib/kubelet"
     bin_path: "/usr/local/bin"
     wip_dir: "/srv/k8s"
+  tasks:
+    - name: Hello world
+      debug:
+        msg: "Hello world"
+
