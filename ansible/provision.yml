@@ -9,7 +9,6 @@
     containerd_version: "2.1.2"
     runc_version: "1.2.6"
     cni_version: "1.6.2"
-    etcd_version: "v3.5.14"
 
     # --- System Configuration ---
     arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
@@ -17,13 +16,97 @@
     service_cidr: "10.96.0.0/12"
 
     # --- Paths ---
-    k8s_pki_path: "/etc/kubernetes/pki"
-    k8s_config_path: "/etc/kubernetes"
-    kubelet_dir: "/var/lib/kubelet"
     bin_path: "/usr/local/bin"
-    wip_dir: "/srv/k8s"
+    cni_path: "/opt/cni/bin"
+    cni_net_dir: "/etc/cni/net.d"
+    config_path: "/etc/kubernetes"
+    pki_path: "/etc/kubernetes/pki"
+    etcd_data_path: "/var/lib/etcd"
+    kubelet_data_path: "/var/lib/kubelet"
+    kubernetes_log_path: "/var/log/kubernetes"
+    wip_dir: "/var/tmp/k8s_wip"
+
   tasks:
-    - name: Hello world
-      debug:
-        msg: "Hello world"
+    - name: "Setup | Create necessary directories"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ bin_path }}"
+        - "{{ cni_path }}"
+        - "{{ cni_net_dir }}"
+        - "{{ config_path }}"
+        - "{{ pki_path }}"
+        - "{{ etcd_data_path }}"
+        - "{{ kubelet_data_path }}"
+        - "{{ kubernetes_log_path }}"
+        - "{{ wip_dir }}"
+
+    - name: "Setup | Check architecture"
+      ansible.builtin.debug:
+        msg: "Detected architecture: {{ arch }}"
+
+    - name: "Install | Download and unpack Kubebuilder tools (etcd, kube-apiserver)"
+      ansible.builtin.unarchive:
+        src: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{ k8s_version }}-linux-{{ arch }}.tar.gz"
+        dest: "{{ wip_dir }}"
+        remote_src: yes
+        creates: "{{ wip_dir }}/kubebuilder/bin/kube-apiserver"
+
+    - name: "Install | Move Kubebuilder binaries to {{ bin_path }}"
+      ansible.builtin.copy:
+        src: "{{ wip_dir }}/kubebuilder/bin/{{ item }}"
+        dest: "{{ bin_path }}/{{ item }}"
+        mode: '0755'
+        remote_src: yes
+      loop:
+        - etcd
+        - kube-apiserver
+        - kubectl
+
+    - name: "Install | Download other Kubernetes components"
+      ansible.builtin.get_url:
+        url: "https://dl.k8s.io/v{{ k8s_version }}/bin/linux/{{ arch }}/{{ item }}"
+        dest: "{{ bin_path }}/{{ item }}"
+        mode: '0755'
+      loop:
+        - kubelet
+        - kube-controller-manager
+        - kube-scheduler
+
+    - name: "Install | Download and install Containerd"
+      ansible.builtin.unarchive:
+        src: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ arch }}.tar.gz"
+        dest: "{{ bin_path }}"
+        remote_src: yes
+        extra_opts: [--strip-components=1, -C, /usr/local] # Installs to /usr/local/bin and /usr/local/sbin
+        creates: "{{ bin_path }}/containerd"
+
+    - name: "Install | Download and install Runc"
+      ansible.builtin.get_url:
+        url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.{{ arch }}"
+        dest: "{{ bin_path }}/runc"
+        mode: '0755'
+
+    - name: "Install | Download and install CNI plugins"
+      ansible.builtin.unarchive:
+        src: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_version }}/cni-plugins-linux-{{ arch }}-v{{ cni_version }}.tgz"
+        dest: "{{ cni_path }}"
+        remote_src: yes
+        creates: "{{ cni_path }}/bridge"
+
+    - name: "Setup | Clean up working directory"
+      ansible.builtin.file:
+        path: "{{ wip_dir }}"
+        state: absent
+
+    - name: "Verify | Check installed binaries"
+      ansible.builtin.command: "ls -l {{ bin_path }}"
+      register: ls_result
+      changed_when: false
+
+    - name: "Verify | Display installed binaries"
+      ansible.builtin.debug:
+        var: ls_result.stdout_lines
 
