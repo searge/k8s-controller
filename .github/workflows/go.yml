@@ -6,8 +6,10 @@ name: Go
 on:
   push:
     branches: ["main"]
+    paths: ["cmd"]
   pull_request:
     branches: ["main"]
+    paths: ["cmd"]
 
 env:
   go-version: 1.23
