@@ -145,10 +145,19 @@
             privatekey_path: "{{ pki_path }}/sa.key"
             format: PKCS8
 
-        - name: "Auth | Create static token file for authentication"
+        - name: "Auth | Generate a secure random token for the admin user"
+          ansible.builtin.set_fact:
+            admin_token: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+          run_once: true # Ensures the token is generated only once per playbook run
+
+        - name: "Auth | Display the generated admin token for debugging"
+          ansible.builtin.debug:
+            msg: "Generated admin token is --- {{ admin_token }} ---"
+
+        - name: "Auth | Create static token file with the generated token"
           ansible.builtin.copy:
             dest: "{{ config_path }}/token.csv"
-            content: "1234567890,admin,admin,system:masters"
+            content: "{{ admin_token }},admin,admin,system:masters"
             mode: '0600'
 
         - name: "Kubeconfigs | Generate kubeconfigs for control plane components"
@@ -161,3 +170,20 @@
             - kube-scheduler
           vars:
             component_name: "system:{{ item }}"
+
+        - name: "PKI | Create a private key for the API server"
+          community.crypto.openssl_privatekey:
+            path: "{{ pki_path }}/apiserver.key"
+
+        - name: "PKI | Create a certificate for the API server"
+          community.crypto.openssl_certificate:
+            path: "{{ pki_path }}/apiserver.crt"
+            privatekey_path: "{{ pki_path }}/apiserver.key"
+            provider: ownca
+            ca_certificate: "{{ pki_path }}/ca.crt"
+            ca_privatekey: "{{ pki_path }}/ca.key"
+            common_name: "kube-apiserver"
+            # Add SANs (Subject Alternative Names) for the API server
+            subject_alt_name:
+              - "IP:127.0.0.1"
+              - "DNS:localhost"
