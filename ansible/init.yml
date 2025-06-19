@@ -48,6 +48,14 @@
 
           always:
             # This block runs whether the tasks above succeeded or failed
+            - name: "Recursively change ownership of the home folder"
+              ansible.builtin.file:
+                path: "/var/home/core"
+                state: directory
+                recurse: true
+                owner: core
+                group: core
+
             - name: "Clean up the temporary dotfiles repository"
               ansible.builtin.file:
                 path: "/var/tmp/dotfiles"
