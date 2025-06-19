@@ -277,9 +277,14 @@
           retries: 12
           delay: 5
 
-    - name: "Configure and run Scheduler and Controller Manager"
-      tags: ["control-plane-managers"]
-      block:
+        - name: "Kubeconfigs | Create .kube directory"
+          ansible.builtin.file:
+            path: "/root/.kube"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
         - name: "Kubeconfigs | Create admin kubeconfig for root user"
           ansible.builtin.template:
             src: admin.kubeconfig.j2
@@ -289,7 +294,7 @@
             mode: '0600'
           vars:
             # We need to slurp the token again in case this block is run separately
-            api_bearer_token: "{{ (lookup('ansible.builtin.file', config_path + '/token.csv')).split(',')[0] }}"
+            api_bearer_token: "{{ api_bearer_token.split(',')[0] }}"
 
         - name: "Verify | Wait for all components to be healthy"
           ansible.builtin.shell: |
@@ -305,6 +310,9 @@
             dest: /etc/systemd/system/kube-scheduler.service
             mode: '0644'
 
+    - name: "Configure and run Scheduler and Controller Manager"
+      tags: ["control-plane-managers"]
+      block:
         - name: "Services | Create kube-controller-manager systemd service file"
           ansible.builtin.template:
             src: kube-controller-manager.service.j2
