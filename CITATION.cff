@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Kubernetes Controller"
+abstract: "A production-grade Golang Kubernetes controller implementation following a step-by-step tutorial for DevOps and SRE engineers. This project demonstrates building Kubernetes controllers with Go, including CLI applications, HTTP servers, informers, custom resources, and observability features."
+authors:
+  - family-names: "Boremchuk"
+    given-names: "Sergij"
+    email: "searge@duck.com"
+repository-code: "https://github.com/Searge/k8s-controller"
+url: "https://github.com/Searge/k8s-controller"
+license: GPL-3.0-or-later
+keywords:
+  - kubernetes
+  - golang
+  - controller
+  - devops
+  - sre
+  - client-go
+  - controller-runtime
+  - cobra
+  - containerization
+  - infrastructure
+version: "0.1.0"
+date-released: "2025-01-16"
+references:
+  - type: software
+    title: "Kubernetes Controller Tutorial Reference"
+    authors:
+      - family-names: "Vasyliev"
+        given-names: "Denis"
+      - family-names: "Sudom"
+        given-names: "Alex"
+    url: "https://github.com/den-vasyliev/k8s-controller-tutorial-ref"
+    notes: "Original tutorial and reference implementation"
+  - type: course
+    title: "Crash Course: Kubernetes controllers"
+    url: "https://fwdays.com/event/kubernetes-controllers-course"
+    notes: "Course by Denis Vasyliev (Principal SRE) and Alex Sudom (Senior Platform Engineer)"
