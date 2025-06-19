@@ -43,7 +43,10 @@ tasks:
 
   reboot:
     desc: "Reboot Podman machine"
-    cmds: ["podman machine reboot {{.VM_NAME}}"]
+    cmds:
+      - podman machine stop {{.VM_NAME}}
+      - sleep 2
+      - podman machine start {{.VM_NAME}}
 
   rm:
     desc: "Remove Podman machine"
