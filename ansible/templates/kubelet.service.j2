@@ -5,11 +5,7 @@ Wants=containerd.service
 After=containerd.service
 
 [Service]
-ExecStart={{ bin_path }}/kubelet \\
-  --config={{ kubelet_data_path }}/config.yaml \\
-  --kubeconfig={{ kubelet_data_path }}/kubeconfig \\
-  --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \\
-  --node-ip={{ ansible_default_ipv4.address }}
+ExecStart={{ bin_path }}/kubelet --config={{ kubelet_data_path }}/config.yaml --kubeconfig={{ kubelet_data_path }}/kubeconfig --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock --node-ip={{ ansible_default_ipv4.address }} --hostname-override={{ ansible_hostname }}
 Restart=on-failure
 RestartSec=5
 

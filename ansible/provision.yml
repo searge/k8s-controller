@@ -27,13 +27,6 @@
     wip_dir: "/var/tmp/k8s_wip"
     container_config_dir: "/etc/containerd"
 
-
-  handlers:
-    - name: Restart containerd
-      ansible.builtin.systemd_service:
-        name: containerd
-        state: restarted
-
   tasks:
     - name: "Download and install necessary packages"
       tags: ["setup"]
@@ -391,14 +384,24 @@
     - name: "Configure and run Kubelet"
       tags: ["kubelet"]
       block:
+        - name: "Containerd | Create systemd service file"
+          ansible.builtin.template:
+            src: containerd.service.j2
+            dest: /etc/systemd/system/containerd.service
+            mode: '0644'
+
         - name: "Containerd | Create configuration to enable systemd cgroup driver"
           ansible.builtin.template:
             src: containerd-config.toml.j2
-            dest: "{{ container_config_dir }}/config.toml"
-          notify: Restart containerd
+            dest: /etc/containerd/config.toml
+            mode: '0644'
 
-        - name: "Containerd | Ensure containerd is restarted if config changed"
-          ansible.builtin.meta: flush_handlers
+        - name: "Containerd | Enable and restart containerd service with new config"
+          ansible.builtin.systemd_service:
+            name: containerd
+            state: restarted
+            enabled: true
+            daemon_reload: true
 
         - name: "Kubelet | Create CNI network configuration"
           ansible.builtin.template:
