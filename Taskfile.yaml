@@ -65,4 +65,4 @@ tasks:
         task provision # If you in the podman machine
         task ssh -- 'cd /srv/app && go-task provision' # To run from the host machine
     cmds:
-      - ansible-playbook provision.yml
+      - ansible-playbook provision.yml {{.CLI_ARGS}}
