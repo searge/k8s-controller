@@ -313,6 +313,12 @@
     - name: "Configure and run Scheduler and Controller Manager"
       tags: ["control-plane-managers"]
       block:
+        - name: "Services | Create kube-scheduler systemd service file"
+          ansible.builtin.template:
+            src: kube-scheduler.service.j2
+            dest: /etc/systemd/system/kube-scheduler.service
+            mode: '0644'
+
         - name: "Services | Create kube-controller-manager systemd service file"
           ansible.builtin.template:
             src: kube-controller-manager.service.j2
@@ -334,3 +340,12 @@
             name: kube-controller-manager
             state: started
             enabled: true
+
+        - name: "Verify | Wait for all control plane components to be healthy"
+          ansible.builtin.shell:
+            cmd: "kubectl get componentstatuses -o json | jq -r '.items[] | select(.conditions[].type == \"Healthy\" and .conditions[].status != \"True\") | .metadata.name'"
+          register: unhealthy_components
+          until: unhealthy_components.stdout == ""
+          retries: 15
+          delay: 5
+          changed_when: false
