@@ -134,6 +134,10 @@
             path: "{{ pki_path }}/ca.csr"
             privatekey_path: "{{ pki_path }}/ca.key"
             common_name: "kubernetes-ca"
+            basic_constraints:
+              - "CA:TRUE"
+            key_usage:
+              - keyCertSign
 
         - name: "PKI | CA | Create a self-signed CA certificate from the CSR"
           community.crypto.x509_certificate:
@@ -154,6 +158,12 @@
             path: "{{ pki_path }}/apiserver.csr"
             privatekey_path: "{{ pki_path }}/apiserver.key"
             common_name: "kube-apiserver"
+            key_usage:
+              - digitalSignature
+              - keyEncipherment
+            extended_key_usage:
+              - serverAuth
+              - clientAuth
             subject_alt_name:
               - "IP:127.0.0.1"
               - "DNS:localhost"
@@ -188,17 +198,17 @@
         # -----------------------------------------------------------------
         - name: "Auth | Generate a secure random token for the admin user"
           ansible.builtin.set_fact:
-            admin_token: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+            api_bearer_token: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
           run_once: true
 
         - name: "Auth | Display the generated admin token for debugging"
           ansible.builtin.debug:
-            msg: "Generated admin token is --- {{ admin_token }} ---"
+            msg: "Generated admin token is --- {{ api_bearer_token }} ---"
 
         - name: "Auth | Create static token file with the generated token"
           ansible.builtin.copy:
             dest: "{{ config_path }}/token.csv"
-            content: "{{ admin_token }},admin,admin,system:masters"
+            content: "{{ api_bearer_token }},admin,admin,system:masters"
             mode: "0600"
 
         # -----------------------------------------------------------------
@@ -277,39 +287,6 @@
           retries: 12
           delay: 5
 
-        - name: "Kubeconfigs | Create .kube directory"
-          ansible.builtin.file:
-            path: "/root/.kube"
-            state: directory
-            owner: root
-            group: root
-            mode: '0700'
-
-        - name: "Kubeconfigs | Create admin kubeconfig for root user"
-          ansible.builtin.template:
-            src: admin.kubeconfig.j2
-            dest: /root/.kube/config
-            owner: root
-            group: root
-            mode: '0600'
-          vars:
-            # We need to slurp the token again in case this block is run separately
-            api_bearer_token: "{{ api_bearer_token.split(',')[0] }}"
-
-        - name: "Verify | Wait for all components to be healthy"
-          ansible.builtin.shell: |
-            kubectl get componentstatuses -o json | jq -r '.items[] | select(.conditions[].type == "Healthy" and .conditions[].status != "True") | .metadata.name'
-          register: unhealthy_components
-          until: unhealthy_components.stdout == ""
-          retries: 15
-          delay: 5
-          changed_when: false
-        - name: "Services | Create kube-scheduler systemd service file"
-          ansible.builtin.template:
-            src: kube-scheduler.service.j2
-            dest: /etc/systemd/system/kube-scheduler.service
-            mode: '0644'
-
     - name: "Configure and run Scheduler and Controller Manager"
       tags: ["control-plane-managers"]
       block:
@@ -341,11 +318,41 @@
             state: started
             enabled: true
 
+    - name: "Verify cluster health"
+      tags: ["verify"]
+      block:
+        - name: "Kubeconfigs | Create .kube directory for root user"
+          ansible.builtin.file:
+            path: "/root/.kube"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: "Kubeconfigs | Read token file content using slurp (respects become)"
+          ansible.builtin.slurp:
+            src: "{{ config_path }}/token.csv"
+          register: token_file_content
+
+        - name: "Kubeconfigs | Set token fact for use in templates"
+          ansible.builtin.set_fact:
+            api_bearer_token: "{{ (token_file_content.content | b64decode).split(',')[0] }}"
+
+        - name: "Kubeconfigs | Create admin kubeconfig for root user"
+          ansible.builtin.template:
+            src: admin.kubeconfig.j2
+            dest: /root/.kube/config
+            owner: root
+            group: root
+            mode: '0600'
+
         - name: "Verify | Wait for all control plane components to be healthy"
           ansible.builtin.shell:
-            cmd: "kubectl get componentstatuses -o json | jq -r '.items[] | select(.conditions[].type == \"Healthy\" and .conditions[].status != \"True\") | .metadata.name'"
-          register: unhealthy_components
-          until: unhealthy_components.stdout == ""
-          retries: 15
+            cmd: |
+              set -e -o pipefail
+              kubectl get cs -o json | jq '.items[] | select(.conditions[].type == "Healthy" and .conditions[].status == "True") | .metadata.name' | wc -l | grep -q 3
+          register: health_check
+          until: health_check.rc == 0
+          retries: 20
           delay: 5
           changed_when: false
