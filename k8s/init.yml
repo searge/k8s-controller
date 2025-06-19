@@ -27,6 +27,32 @@
             msg: "All required system packages are already installed."
           when: not rpm_ostree_result.changed
 
+        - name: "Provision user dotfiles"
+          block:
+            - name: "Clone dotfiles repository to a temporary location"
+              ansible.builtin.git:
+                repo: "https://github.com/Searge/dotfiles.git"
+                dest: "/var/tmp/dotfiles"
+                version: "server"
+                update: true
+                depth: 1
+
+            - name: "Synchronize dotfiles to user's home directory"
+              ansible.posix.synchronize:
+                src: "/var/tmp/dotfiles/" # The trailing slash is important!
+                dest: "/var/home/core/"
+                rsync_opts:
+                  - "--exclude=.git"
+                  - "--exclude=.github"
+              become: false
+
+          always:
+            # This block runs whether the tasks above succeeded or failed
+            - name: "Clean up the temporary dotfiles repository"
+              ansible.builtin.file:
+                path: "/var/tmp/dotfiles"
+                state: absent
+
       rescue:
         - name: "!!! FAILURE | An error occurred during the setup"
           debug:
