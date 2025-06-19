@@ -1,0 +1,38 @@
+---
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+env:
+  ANSIBLE_CONFIG: "{{.USER_WORKING_DIR}}/k8s/ansible.cfg"
+  FORCE_COLOR: 1
+
+tasks:
+  default:
+    desc: "Show available tasks"
+    aliases:
+      - l
+      - a
+    cmds:
+      - task --list-all
+    silent: true
+
+  init:
+    desc: "Init podman machine"
+    dir: '{{.USER_WORKING_DIR}}/k8s'
+    cmds: ['./init.sh']
+
+  ssh:
+    desc: "SSH into Podman machine"
+    dir: '{{.USER_WORKING_DIR}}/k8s'
+    cmds: ['podman machine ssh dev']
+
+  reboot:
+    desc: "Reboot Podman machine"
+    dir: '{{.USER_WORKING_DIR}}/k8s'
+    cmds: ['podman machine reboot dev']
+
+
+  rm:
+    desc: "Remove Podman machine"
+    dir: '{{.USER_WORKING_DIR}}/k8s'
+    cmds: ['podman machine rm dev -f']
