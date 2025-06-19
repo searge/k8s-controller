@@ -194,6 +194,28 @@
             format: PEM
 
         # -----------------------------------------------------------------
+        # Kubelet Certificate Setup
+        # -----------------------------------------------------------------
+        - name: "PKI | Kubelet | Create a private key for the kubelet"
+          community.crypto.openssl_privatekey:
+            path: "{{ pki_path }}/kubelet.key"
+
+        - name: "PKI | Kubelet | Create a CSR for the kubelet"
+          community.crypto.openssl_csr:
+            path: "{{ pki_path }}/kubelet.csr"
+            privatekey_path: "{{ pki_path }}/kubelet.key"
+            common_name: "system:node:{{ ansible_hostname }}"
+            organization_name: "system:nodes"
+
+        - name: "PKI | Kubelet | Create a certificate for the kubelet signed by our CA"
+          community.crypto.x509_certificate:
+            path: "{{ pki_path }}/kubelet.crt"
+            csr_path: "{{ pki_path }}/kubelet.csr"
+            provider: ownca
+            ownca_path: "{{ pki_path }}/ca.crt"
+            ownca_privatekey_path: "{{ pki_path }}/ca.key"
+
+        # -----------------------------------------------------------------
         # Authentication Token
         # -----------------------------------------------------------------
         - name: "Auth | Generate a secure random token for the admin user"
@@ -355,4 +377,46 @@
           until: health_check.rc == 0
           retries: 20
           delay: 5
+          changed_when: false
+
+    - name: "Configure and run Kubelet"
+      tags: ["kubelet"]
+      block:
+        - name: "Kubelet | Create CNI network configuration"
+          ansible.builtin.template:
+            src: 10-bridge.conf.j2
+            dest: "{{ cni_net_dir }}/10-bridge.conf"
+
+        - name: "Kubelet | Create kubelet kubeconfig file"
+          ansible.builtin.template:
+            src: kubelet.kubeconfig.j2
+            dest: "{{ kubelet_data_path }}/kubeconfig"
+
+        - name: "Kubelet | Create kubelet configuration file"
+          ansible.builtin.template:
+            src: kubelet-config.yaml.j2
+            dest: "{{ kubelet_data_path }}/config.yaml"
+
+        - name: "Kubelet | Create kubelet systemd service file"
+          ansible.builtin.template:
+            src: kubelet.service.j2
+            dest: /etc/systemd/system/kubelet.service
+
+        - name: "Kubelet | Reload systemd and start kubelet"
+          ansible.builtin.systemd_service:
+            name: kubelet
+            state: started
+            enabled: true
+            daemon_reload: true
+
+        - name: "Verify | Wait for the node to become Ready"
+          ansible.builtin.shell:
+            cmd: >-
+              kubectl get nodes {{ ansible_hostname }} -o json |
+              jq -r '.status.conditions[] |
+              select(.type == "Ready" and .status == "True") | .type'
+          register: node_status
+          until: node_status.stdout == "Ready"
+          retries: 20
+          delay: 6
           changed_when: false
