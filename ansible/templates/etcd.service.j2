@@ -6,16 +6,7 @@ After=network-online.target
 
 [Service]
 Type=notify
-ExecStart={{ bin_path }}/etcd \\
-  --name etcd-server \\
-  --data-dir {{ etcd_data_path }} \\
-  --listen-client-urls http://127.0.0.1:2379 \\
-  --advertise-client-urls http://127.0.0.1:2379 \\
-  --listen-peer-urls http://127.0.0.1:2380 \\
-  --initial-advertise-peer-urls http://127.0.0.1:2380 \\
-  --initial-cluster etcd-server=http://127.0.0.1:2380 \\
-  --initial-cluster-token etcd-cluster-0 \\
-  --initial-cluster-state new
+ExecStart={{ bin_path }}/etcd --name etcd-server --data-dir {{ etcd_data_path }} --listen-client-urls http://127.0.0.1:2379 --advertise-client-urls http://127.0.0.1:2379 --listen-peer-urls http://127.0.0.1:2380 --initial-advertise-peer-urls http://127.0.0.1:2380 --initial-cluster etcd-server=http://127.0.0.1:2380 --initial-cluster-token etcd-cluster-0 --initial-cluster-state new
 Restart=on-failure
 RestartSec=5
 

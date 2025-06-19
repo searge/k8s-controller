@@ -5,24 +5,7 @@ Wants=etcd.service
 After=etcd.service
 
 [Service]
-ExecStart={{ bin_path }}/kube-apiserver \\
-  --advertise-address=127.0.0.1 \\
-  --allow-privileged=true \\
-  --authorization-mode=AlwaysAllow \\
-  --bind-address=0.0.0.0 \\
-  --client-ca-file={{ pki_path }}/ca.crt \\
-  --enable-admission-plugins=NodeRestriction \\
-  --etcd-servers=http://127.0.0.1:2379 \\
-  --kubelet-client-certificate={{ pki_path }}/apiserver.crt \\
-  --kubelet-client-key={{ pki_path }}/apiserver.key \\
-  --runtime-config=api/all=true \\
-  --service-account-issuer=https://kubernetes.default.svc.cluster.local \\
-  --service-account-key-file={{ pki_path }}/sa.pub \\
-  --service-account-signing-key-file={{ pki_path }}/sa.key \\
-  --service-cluster-ip-range={{ service_cidr }} \\
-  --tls-cert-file={{ pki_path }}/apiserver.crt \\
-  --tls-private-key-file={{ pki_path }}/apiserver.key \\
-  --token-auth-file={{ config_path }}/token.csv
+ExecStart={{ bin_path }}/kube-apiserver --advertise-address=127.0.0.1 --allow-privileged=true --authorization-mode=AlwaysAllow --bind-address=0.0.0.0 --client-ca-file={{ pki_path }}/ca.crt --enable-admission-plugins=NodeRestriction --etcd-servers=http://127.0.0.1:2379 --kubelet-client-certificate={{ pki_path }}/apiserver.crt --kubelet-client-key={{ pki_path }}/apiserver.key --runtime-config=api/all=true --service-account-issuer=https://kubernetes.default.svc.cluster.local --service-account-key-file={{ pki_path }}/sa.pub --service-account-signing-key-file={{ pki_path }}/sa.key --service-cluster-ip-range={{ service_cidr }} --tls-cert-file={{ pki_path }}/apiserver.crt --tls-private-key-file={{ pki_path }}/apiserver.key --token-auth-file={{ config_path }}/token.csv
 Restart=on-failure
 RestartSec=5
 
