@@ -51,7 +51,7 @@
       ansible.builtin.unarchive:
         src: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{ k8s_version }}-linux-{{ arch }}.tar.gz"
         dest: "{{ wip_dir }}"
-        remote_src: yes
+        remote_src: true
         creates: "{{ wip_dir }}/kubebuilder/bin/kube-apiserver"
 
     - name: "Install | Move Kubebuilder binaries to {{ bin_path }}"
@@ -59,7 +59,7 @@
         src: "{{ wip_dir }}/kubebuilder/bin/{{ item }}"
         dest: "{{ bin_path }}/{{ item }}"
         mode: '0755'
-        remote_src: yes
+        remote_src: true
       loop:
         - etcd
         - kube-apiserver
@@ -75,13 +75,24 @@
         - kube-controller-manager
         - kube-scheduler
 
-    - name: "Install | Download and install Containerd"
+    - name: "Install | Download and unpack Containerd to a temp directory"
       ansible.builtin.unarchive:
         src: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ arch }}.tar.gz"
-        dest: "{{ bin_path }}"
-        remote_src: yes
-        extra_opts: [--strip-components=1, -C, /usr/local] # Installs to /usr/local/bin and /usr/local/sbin
-        creates: "{{ bin_path }}/containerd"
+        dest: "{{ wip_dir }}"
+        remote_src: true
+        creates: "{{ wip_dir }}/bin/containerd"
+
+    - name: "Install | Move Containerd binaries to {{ bin_path }}"
+      ansible.builtin.copy:
+        src: "{{ wip_dir }}/bin/{{ item }}"
+        dest: "{{ bin_path }}/{{ item }}"
+        mode: '0755'
+        remote_src: true
+      loop:
+        - containerd
+        - containerd-shim-runc-v2
+        - containerd-stress
+        - ctr
 
     - name: "Install | Download and install Runc"
       ansible.builtin.get_url:
@@ -93,13 +104,8 @@
       ansible.builtin.unarchive:
         src: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_version }}/cni-plugins-linux-{{ arch }}-v{{ cni_version }}.tgz"
         dest: "{{ cni_path }}"
-        remote_src: yes
+        remote_src: true
         creates: "{{ cni_path }}/bridge"
-
-    - name: "Setup | Clean up working directory"
-      ansible.builtin.file:
-        path: "{{ wip_dir }}"
-        state: absent
 
     - name: "Verify | Check installed binaries"
       ansible.builtin.command: "ls -l {{ bin_path }}"
