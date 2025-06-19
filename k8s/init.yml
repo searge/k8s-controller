@@ -1,2 +1,38 @@
 ---
-- name:  Initialize K8s Contolplane
+- name: "Initial setup Fedora Core for k8s"
+  hosts: [localhost]
+  connection: local
+  become: true
+
+  tasks:
+    - name: "Run setup tasks"
+      block:
+        - name: "Install required system packages for K8s and Ansible Crypto"
+          command: "rpm-ostree install -y wget vim go-task"
+          changed_when: "'Changes queued for next boot' in rpm_ostree_result.stdout"
+          register: rpm_ostree_result
+
+        - name: "Set a fact with just the packages that were added"
+          set_fact:
+            installed_packages: "{{ rpm_ostree_result.stdout | regex_search('Added:(.|\n)*?Changes queued', multiline=True) }}"
+          when: rpm_ostree_result.changed
+
+        - name: "SUCCESS | Show only the list of installed packages"
+          debug:
+            var: installed_packages
+          when: rpm_ostree_result.changed
+
+        - name: "SUCCESS | No new packages were installed"
+          debug:
+            msg: "All required system packages are already installed."
+          when: not rpm_ostree_result.changed
+
+      rescue:
+        - name: "!!! FAILURE | An error occurred during the setup"
+          debug:
+            msg: |
+              A task failed. Please check the logs.
+              Failed Task: {{ ansible_failed_task.name }}
+              Error Details: {{ ansible_failed_result.msg | default('No specific message') }}
+              Stderr: {{ ansible_failed_result.stderr | default('N/A') }}
+          failed_when: true

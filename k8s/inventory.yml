@@ -1,0 +1,7 @@
+local:
+  hosts:
+    localhost:
+      ansible_become: true
+      ansible_connection: local
+      ansible_gather_facts: true
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"
