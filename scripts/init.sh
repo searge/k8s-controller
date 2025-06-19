@@ -45,6 +45,24 @@ podman machine ssh "${VM_NAME}" \
   ansible-playbook init.yml"
 
 echo "--- Playbook execution finished. ---"
-echo "--- For a full log, you can run the playbook command manually with -vvv. ---"
-echo "--- Sending reboot command to apply rpm-ostree changes... ---"
-podman machine ssh "${VM_NAME}" 'sudo reboot'
+echo "--- For a full log, please check /var/tmp/ansible.log ---"
+
+echo
+echo "======================================================================================"
+echo "IMPORTANT: System packages were installed and a reboot is required to apply them."
+echo
+# The 'stop' command is blocking and will wait until the machine is fully shut down.
+podman machine stop "${VM_NAME}"
+
+echo "--- Restarting machine '${VM_NAME}'... ---"
+podman machine start "${VM_NAME}" && sleep 2
+
+echo -n "--- Waiting for machine to become available after reboot..."
+# It's crucial to wait for SSH to be ready again after the restart.
+while ! podman machine ssh "${VM_NAME}" 'true' &>/dev/null; do
+    printf "."
+    sleep 2
+done
+
+echo -e "\n--- Machine has been restarted successfully and is ready for use! ---"
+echo "======================================================================================"
