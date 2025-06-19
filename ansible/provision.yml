@@ -27,92 +27,137 @@
     wip_dir: "/var/tmp/k8s_wip"
 
   tasks:
-    - name: "Setup | Create necessary directories"
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: directory
-        mode: '0755'
-      loop:
-        - "{{ bin_path }}"
-        - "{{ cni_path }}"
-        - "{{ cni_net_dir }}"
-        - "{{ config_path }}"
-        - "{{ pki_path }}"
-        - "{{ etcd_data_path }}"
-        - "{{ kubelet_data_path }}"
-        - "{{ kubernetes_log_path }}"
-        - "{{ wip_dir }}"
+    - name: "Download and install necessary packages"
+      tags: ["setup"]
+      block:
+        - name: "Setup | Create necessary directories"
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: "0755"
+          loop:
+            - "{{ bin_path }}"
+            - "{{ cni_path }}"
+            - "{{ cni_net_dir }}"
+            - "{{ config_path }}"
+            - "{{ pki_path }}"
+            - "{{ etcd_data_path }}"
+            - "{{ kubelet_data_path }}"
+            - "{{ kubernetes_log_path }}"
+            - "{{ wip_dir }}"
 
-    - name: "Setup | Check architecture"
-      ansible.builtin.debug:
-        msg: "Detected architecture: {{ arch }}"
+        - name: "Setup | Check architecture"
+          ansible.builtin.debug:
+            msg: "Detected architecture: {{ arch }}"
 
-    - name: "Install | Download and unpack Kubebuilder tools (etcd, kube-apiserver)"
-      ansible.builtin.unarchive:
-        src: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{ k8s_version }}-linux-{{ arch }}.tar.gz"
-        dest: "{{ wip_dir }}"
-        remote_src: true
-        creates: "{{ wip_dir }}/kubebuilder/bin/kube-apiserver"
+        - name: "Install | Download and unpack Kubebuilder tools (etcd, kube-apiserver)"
+          ansible.builtin.unarchive:
+            src: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{ k8s_version }}-linux-{{ arch }}.tar.gz"
+            dest: "{{ wip_dir }}"
+            remote_src: true
+            creates: "{{ wip_dir }}/kubebuilder/bin/kube-apiserver"
 
-    - name: "Install | Move Kubebuilder binaries to {{ bin_path }}"
-      ansible.builtin.copy:
-        src: "{{ wip_dir }}/kubebuilder/bin/{{ item }}"
-        dest: "{{ bin_path }}/{{ item }}"
-        mode: '0755'
-        remote_src: true
-      loop:
-        - etcd
-        - kube-apiserver
-        - kubectl
+        - name: "Install | Move Kubebuilder binaries to {{ bin_path }}"
+          ansible.builtin.copy:
+            src: "{{ wip_dir }}/kubebuilder/bin/{{ item }}"
+            dest: "{{ bin_path }}/{{ item }}"
+            mode: "0755"
+            remote_src: true
+          loop:
+            - etcd
+            - kube-apiserver
+            - kubectl
 
-    - name: "Install | Download other Kubernetes components"
-      ansible.builtin.get_url:
-        url: "https://dl.k8s.io/v{{ k8s_version }}/bin/linux/{{ arch }}/{{ item }}"
-        dest: "{{ bin_path }}/{{ item }}"
-        mode: '0755'
-      loop:
-        - kubelet
-        - kube-controller-manager
-        - kube-scheduler
+        - name: "Install | Download other Kubernetes components"
+          ansible.builtin.get_url:
+            url: "https://dl.k8s.io/v{{ k8s_version }}/bin/linux/{{ arch }}/{{ item }}"
+            dest: "{{ bin_path }}/{{ item }}"
+            mode: "0755"
+          loop:
+            - kubelet
+            - kube-controller-manager
+            - kube-scheduler
 
-    - name: "Install | Download and unpack Containerd to a temp directory"
-      ansible.builtin.unarchive:
-        src: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ arch }}.tar.gz"
-        dest: "{{ wip_dir }}"
-        remote_src: true
-        creates: "{{ wip_dir }}/bin/containerd"
+        - name: "Install | Download and unpack Containerd to a temp directory"
+          ansible.builtin.unarchive:
+            src: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ arch }}.tar.gz"
+            dest: "{{ wip_dir }}"
+            remote_src: true
+            creates: "{{ wip_dir }}/bin/containerd"
 
-    - name: "Install | Move Containerd binaries to {{ bin_path }}"
-      ansible.builtin.copy:
-        src: "{{ wip_dir }}/bin/{{ item }}"
-        dest: "{{ bin_path }}/{{ item }}"
-        mode: '0755'
-        remote_src: true
-      loop:
-        - containerd
-        - containerd-shim-runc-v2
-        - containerd-stress
-        - ctr
+        - name: "Install | Move Containerd binaries to {{ bin_path }}"
+          ansible.builtin.copy:
+            src: "{{ wip_dir }}/bin/{{ item }}"
+            dest: "{{ bin_path }}/{{ item }}"
+            mode: "0755"
+            remote_src: true
+          loop:
+            - containerd
+            - containerd-shim-runc-v2
+            - containerd-stress
+            - ctr
 
-    - name: "Install | Download and install Runc"
-      ansible.builtin.get_url:
-        url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.{{ arch }}"
-        dest: "{{ bin_path }}/runc"
-        mode: '0755'
+        - name: "Install | Download and install Runc"
+          ansible.builtin.get_url:
+            url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.{{ arch }}"
+            dest: "{{ bin_path }}/runc"
+            mode: "0755"
 
-    - name: "Install | Download and install CNI plugins"
-      ansible.builtin.unarchive:
-        src: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_version }}/cni-plugins-linux-{{ arch }}-v{{ cni_version }}.tgz"
-        dest: "{{ cni_path }}"
-        remote_src: true
-        creates: "{{ cni_path }}/bridge"
+        - name: "Install | Download and install CNI plugins"
+          ansible.builtin.unarchive:
+            src: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_version }}/cni-plugins-linux-{{ arch }}-v{{ cni_version }}.tgz"
+            dest: "{{ cni_path }}"
+            remote_src: true
+            creates: "{{ cni_path }}/bridge"
 
-    - name: "Verify | Check installed binaries"
-      ansible.builtin.command: "ls -l {{ bin_path }}"
-      register: ls_result
-      changed_when: false
+        - name: "Verify | Check installed binaries"
+          ansible.builtin.command: "ls -l {{ bin_path }}"
+          register: ls_result
+          changed_when: false
 
-    - name: "Verify | Display installed binaries"
-      ansible.builtin.debug:
-        var: ls_result.stdout_lines
+        - name: "Verify | Display installed binaries"
+          ansible.builtin.debug:
+            var: ls_result.stdout_lines
 
+    - name: "Generate Certificates, Tokens, and Kubeconfigs"
+      tags: ["certs"]
+      block:
+        - name: "PKI | Create a private key for our new CA"
+          community.crypto.openssl_privatekey:
+            path: "{{ pki_path }}/ca.key"
+            size: 2048
+
+        - name: "PKI | Create a self-signed CA certificate"
+          community.crypto.openssl_certificate:
+            path: "{{ pki_path }}/ca.crt"
+            privatekey_path: "{{ pki_path }}/ca.key"
+            provider: selfsigned
+            common_name: "kubernetes-ca"
+
+        - name: "PKI | Create Service Account private key"
+          community.crypto.openssl_privatekey:
+            path: "{{ pki_path }}/sa.key"
+            size: 2048
+
+        - name: "PKI | Create Service Account public key"
+          community.crypto.openssl_publickey:
+            path: "{{ pki_path }}/sa.pub"
+            privatekey_path: "{{ pki_path }}/sa.key"
+            format: PKCS8
+
+        - name: "Auth | Create static token file for authentication"
+          ansible.builtin.copy:
+            dest: "{{ config_path }}/token.csv"
+            content: "1234567890,admin,admin,system:masters"
+            mode: '0600'
+
+        - name: "Kubeconfigs | Generate kubeconfigs for control plane components"
+          ansible.builtin.template:
+            src: component.kubeconfig.j2
+            dest: "{{ config_path }}/{{ item }}.kubeconfig"
+            mode: '0600'
+          loop:
+            - kube-controller-manager
+            - kube-scheduler
+          vars:
+            component_name: "system:{{ item }}"
