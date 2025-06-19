@@ -214,3 +214,53 @@
             - kube-scheduler
           vars:
             component_name: "system:{{ item }}"
+
+    - name: "Configure and run Core Control Plane services"
+      tags: ["control-plane-core"]
+      block:
+        - name: "Services | Create etcd systemd service file"
+          ansible.builtin.template:
+            src: etcd.service.j2
+            dest: /etc/systemd/system/etcd.service
+            mode: '0644'
+
+        - name: "Services | Create kube-apiserver systemd service file"
+          ansible.builtin.template:
+            src: kube-apiserver.service.j2
+            dest: /etc/systemd/system/kube-apiserver.service
+            mode: '0644'
+
+        - name: "Services | Reload systemd to apply changes"
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+
+        - name: "Services | Enable and start etcd"
+          ansible.builtin.systemd_service:
+            name: etcd
+            state: started
+            enabled: true
+
+        - name: "Services | Wait for etcd to be healthy"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:2379/health
+            status_code: 200
+          register: etcd_health
+          until: etcd_health.status == 200
+          retries: 10
+          delay: 5
+
+        - name: "Services | Enable and start kube-apiserver"
+          ansible.builtin.systemd_service:
+            name: kube-apiserver
+            state: started
+            enabled: true
+
+        - name: "Services | Wait for kube-apiserver to be ready"
+          ansible.builtin.uri:
+            url: https://127.0.0.1:6443/readyz
+            validate_certs: false # System doesn't trust our custom CA by default
+            status_code: 200
+          register: apiserver_health
+          until: apiserver_health.status == 200
+          retries: 12
+          delay: 5
