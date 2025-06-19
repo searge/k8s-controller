@@ -255,10 +255,22 @@
             state: started
             enabled: true
 
+        - name: "Services | Read token file content using slurp (respects become)"
+          ansible.builtin.slurp:
+            src: "{{ config_path }}/token.csv"
+          register: token_file_content
+
+        - name: "Services | Set token fact from slurped content"
+          ansible.builtin.set_fact:
+            api_bearer_token: "{{ (token_file_content.content | b64decode).split(',')[0] }}"
+
         - name: "Services | Wait for kube-apiserver to be ready"
           ansible.builtin.uri:
-            url: https://127.0.0.1:6443/readyz
-            validate_certs: false # System doesn't trust our custom CA by default
+            url: https://127.0.0.1:6443/livez
+            method: GET
+            validate_certs: false
+            headers:
+              Authorization: "Bearer {{ api_bearer_token }}"
             status_code: 200
           register: apiserver_health
           until: apiserver_health.status == 200
