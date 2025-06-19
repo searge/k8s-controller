@@ -1,0 +1,13 @@
+[Unit]
+Description=Kubernetes Controller Manager
+Documentation=https://github.com/kubernetes/kubernetes
+Wants=kube-apiserver.service
+After=kube-apiserver.service
+
+[Service]
+ExecStart={{ bin_path }}/kube-controller-manager --kubeconfig={{ config_path }}/kube-controller-manager.kubeconfig --cluster-cidr={{ pod_network_cidr }} --service-cluster-ip-range={{ service_cidr }} --cluster-name=kubernetes --leader-elect=true --root-ca-file={{ pki_path }}/ca.crt --service-account-private-key-file={{ pki_path }}/sa.key --use-service-account-credentials=true --bind-address=127.0.0.1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

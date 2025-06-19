@@ -1,0 +1,13 @@
+[Unit]
+Description=Kubernetes Scheduler
+Documentation=https://github.com/kubernetes/kubernetes
+Wants=kube-apiserver.service
+After=kube-apiserver.service
+
+[Service]
+ExecStart={{ bin_path }}/kube-scheduler --kubeconfig={{ config_path }}/kube-scheduler.kubeconfig --leader-elect=true --bind-address=127.0.0.1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

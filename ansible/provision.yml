@@ -276,3 +276,53 @@
           until: apiserver_health.status == 200
           retries: 12
           delay: 5
+
+    - name: "Configure and run Scheduler and Controller Manager"
+      tags: ["control-plane-managers"]
+      block:
+        - name: "Kubeconfigs | Create admin kubeconfig for root user"
+          ansible.builtin.template:
+            src: admin.kubeconfig.j2
+            dest: /root/.kube/config
+            owner: root
+            group: root
+            mode: '0600'
+          vars:
+            # We need to slurp the token again in case this block is run separately
+            api_bearer_token: "{{ (lookup('ansible.builtin.file', config_path + '/token.csv')).split(',')[0] }}"
+
+        - name: "Verify | Wait for all components to be healthy"
+          ansible.builtin.shell: |
+            kubectl get componentstatuses -o json | jq -r '.items[] | select(.conditions[].type == "Healthy" and .conditions[].status != "True") | .metadata.name'
+          register: unhealthy_components
+          until: unhealthy_components.stdout == ""
+          retries: 15
+          delay: 5
+          changed_when: false
+        - name: "Services | Create kube-scheduler systemd service file"
+          ansible.builtin.template:
+            src: kube-scheduler.service.j2
+            dest: /etc/systemd/system/kube-scheduler.service
+            mode: '0644'
+
+        - name: "Services | Create kube-controller-manager systemd service file"
+          ansible.builtin.template:
+            src: kube-controller-manager.service.j2
+            dest: /etc/systemd/system/kube-controller-manager.service
+            mode: '0644'
+
+        - name: "Services | Reload systemd to apply changes"
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+
+        - name: "Services | Enable and start kube-scheduler"
+          ansible.builtin.systemd_service:
+            name: kube-scheduler
+            state: started
+            enabled: true
+
+        - name: "Services | Enable and start kube-controller-manager"
+          ansible.builtin.systemd_service:
+            name: kube-controller-manager
+            state: started
+            enabled: true
