@@ -24,8 +24,8 @@
     etcd_data_path: "/var/lib/etcd"
     kubelet_data_path: "/var/lib/kubelet"
     kubernetes_log_path: "/var/log/kubernetes"
-    wip_dir: "/var/tmp/k8s_wip"
     container_config_dir: "/etc/containerd"
+    wip_dir: "/var/tmp/k8s_wip"
 
   tasks:
     - name: "Download and install necessary packages"
