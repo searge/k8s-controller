@@ -17,7 +17,9 @@ env:
   GOARCH: "amd64"
 
 vars:
-  BUILD_FLAGS: "-v -o {{.APP_NAME}} -ldflags \"-X=github.com/Searge/{{.APP_NAME}}/cmd.appVersion={{.VERSION}}\""
+  BUILD_FLAGS: >-
+   -v -o {{.LOCALBIN}}/{{.APP_NAME}} -ldflags
+   "-X=github.com/Searge/{{.APP_NAME}}/cmd.appVersion={{.VERSION}}"
   ENVTEST_VERSION: "release-0.19"
 
 tasks:
