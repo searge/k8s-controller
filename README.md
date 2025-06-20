@@ -15,9 +15,72 @@ This project follows [the step-by-step tutorial](https://github.com/den-vasyliev
 **Course**: [Crash Course: Kubernetes controllers](https://fwdays.com/event/kubernetes-controllers-course)
 **Instructors**: @den-vasyliev (Principal SRE), @Alex0M (Senior Platform Engineer)
 
+## Quick Start
+
+### One-Command Setup
+
+Get a complete Kubernetes development environment running in seconds:
+
+```bash
+# Clone the repository
+git clone https://github.com/Searge/k8s-controller.git
+cd k8s-controller
+
+# Initialize Podman machine and provision Kubernetes cluster
+task init && task ssh -- 'cd /srv/app && go-task provision'
+
+# Access your cluster
+task ssh
+kubectl get nodes
+kubectl get all -A
+```
+
+This automated setup creates:
+
+- Podman machine with Fedora CoreOS
+- Complete single-node Kubernetes cluster (v1.30.0)
+- All control plane components (etcd, API server, scheduler, controller-manager)
+- Kubelet with containerd runtime
+- CNI networking with bridge plugin
+- PKI infrastructure with auto-generated certificates
+
+## Development Environment
+
+The project includes a fully automated Kubernetes cluster setup for realistic controller development and testing. See [ansible/README.md](ansible/README.md) for detailed information about:
+
+- Automated cluster provisioning
+- Component configuration
+- Available Ansible tags for selective deployment
+- Troubleshooting and logging
+
+### Available Tasks
+
+The project uses [Taskfile](https://taskfile.dev/) for task automation:
+
+```bash
+# View all available tasks
+task
+
+# Development workflow
+task dev          # Format, lint, test, build
+task test-watch   # Run tests in watch mode
+task docker-build # Build Docker image
+
+# Environment management
+task init         # Create and setup Podman machine
+task ssh          # SSH into the machine
+task provision    # Run Ansible provisioning
+task reboot       # Restart the machine
+task rm           # Remove the machine
+```
+
 ## Progress
 
 - [x] Golang CLI Application using Cobra
+- [x] Automated Kubernetes cluster setup with Ansible
+- [x] Podman machine integration with volume mounts
+- [x] Complete PKI infrastructure with certificate generation
+- [x] Taskfile automation for development workflow
 - [ ] Zerolog for structured logging
 - [ ] pflag for CLI log level flags
 - [ ] FastHTTP server command
@@ -58,17 +121,20 @@ C4Container
     Rel(controller, k8s, "Reconcile")
 ```
 
-## Quick Start
+## Project Structure
 
 ```bash
-# Clone and setup
-git clone https://github.com/Searge/k8s-controller.git
-cd k8s-controller
-go mod download
-
-# Build and run
-go build -o bin/controller main.go
-./bin/controller --help
+├── ansible/              # Kubernetes cluster automation
+│   ├── README.md         # Detailed Ansible documentation
+│   ├── init.yml          # Initial system setup
+│   ├── provision.yml     # Main K8s provisioning
+│   └── templates/        # Service and config templates
+├── cmd/                  # CLI application code
+├── notebooks/            # Go learning notebooks
+├── scripts/              # Setup and utility scripts
+├── Taskfile.yaml        # Task automation
+├── Dockerfile           # Container image definition
+└── README.md            # This file
 ```
 
 ## Dependencies
@@ -76,6 +142,7 @@ go build -o bin/controller main.go
 - **CLI**: cobra, pflag, zerolog
 - **HTTP**: fasthttp
 - **Kubernetes**: client-go, controller-runtime
+- **Infrastructure**: Podman, Ansible, Taskfile
 - **Observability**: OpenTelemetry, Prometheus metrics
 - **Auth**: JWT tokens
 - **Build**: Docker, GitHub Actions
