@@ -55,6 +55,11 @@ tasks:
     cmds:
       - go fmt ./...
 
+  test:
+    desc: Run tests across the project.
+    cmds:
+      - go test -v ./...
+
   lint:
     desc: Run `golint` on the project.
     cmds:
@@ -83,55 +88,55 @@ tasks:
   ######################################################################
   # TESTING COMMANDS
   ######################################################################
-  install-test-tools:
-    desc: "Install testing tools"
-    deps: [setup]
-    cmds:
-      - |
-        if [ ! -f "{{.LOCALBIN}}/setup-envtest-{{.ENVTEST_VERSION}}" ]; then
-          echo "Downloading setup-envtest@{{.ENVTEST_VERSION}}"
-          GOBIN={{.LOCALBIN}} go install sigs.k8s.io/controller-runtime/tools/setup-envtest@{{.ENVTEST_VERSION}}
-          mv {{.LOCALBIN}}/setup-envtest {{.LOCALBIN}}/setup-envtest-{{.ENVTEST_VERSION}}
-        fi
-        ln -sf {{.LOCALBIN}}/setup-envtest-{{.ENVTEST_VERSION}} {{.LOCALBIN}}/setup-envtest
-      - go install gotest.tools/gotestsum@latest
-    generates:
-      - "{{.LOCALBIN}}/setup-envtest"
-    status:
-      - test -f {{.LOCALBIN}}/setup-envtest-{{.ENVTEST_VERSION}}
+  # install-test-tools:
+  #   desc: "Install testing tools"
+  #   deps: [setup]
+  #   cmds:
+  #     - |
+  #       if [ ! -f "{{.LOCALBIN}}/setup-envtest-{{.ENVTEST_VERSION}}" ]; then
+  #         echo "Downloading setup-envtest@{{.ENVTEST_VERSION}}"
+  #         GOBIN={{.LOCALBIN}} go install sigs.k8s.io/controller-runtime/tools/setup-envtest@{{.ENVTEST_VERSION}}
+  #         mv {{.LOCALBIN}}/setup-envtest {{.LOCALBIN}}/setup-envtest-{{.ENVTEST_VERSION}}
+  #       fi
+  #       ln -sf {{.LOCALBIN}}/setup-envtest-{{.ENVTEST_VERSION}} {{.LOCALBIN}}/setup-envtest
+  #     - go install gotest.tools/gotestsum@latest
+  #   generates:
+  #     - "{{.LOCALBIN}}/setup-envtest"
+  #   status:
+  #     - test -f {{.LOCALBIN}}/setup-envtest-{{.ENVTEST_VERSION}}
 
-  test:
-    desc: "Run tests with gotestsum"
-    deps: [install-test-tools]
-    env:
-      KUBEBUILDER_ASSETS:
-        sh: "{{.LOCALBIN}}/setup-envtest use --bin-dir {{.LOCALBIN}} -p path"
-    cmds:
-      - gotestsum --junitfile report.xml --format testname ./... {{.CLI_ARGS}}
+  # test:
+  #   desc: "Run tests with gotestsum"
+  #   deps: [install-test-tools]
+  #   env:
+  #     KUBEBUILDER_ASSETS:
+  #       sh: "{{.LOCALBIN}}/setup-envtest use --bin-dir {{.LOCALBIN}} -p path"
+  #   cmds:
+  #     - gotestsum --junitfile report.xml --format testname ./... {{.CLI_ARGS}}
 
-  test-coverage:
-    desc: "Run tests with coverage report"
-    deps: [install-test-tools]
-    env:
-      KUBEBUILDER_ASSETS:
-        sh: "{{.LOCALBIN}}/setup-envtest use --bin-dir {{.LOCALBIN}} -p path"
-    cmds:
-      - go install github.com/boumenot/gocover-cobertura@latest
-      - go test -coverprofile=coverage.out -covermode=count ./...
-      - go tool cover -func=coverage.out
-      - gocover-cobertura < coverage.out > coverage.xml
-    generates:
-      - coverage.out
-      - coverage.xml
+  # test-coverage:
+  #   desc: "Run tests with coverage report"
+  #   deps: [install-test-tools]
+  #   env:
+  #     KUBEBUILDER_ASSETS:
+  #       sh: "{{.LOCALBIN}}/setup-envtest use --bin-dir {{.LOCALBIN}} -p path"
+  #   cmds:
+  #     - go install github.com/boumenot/gocover-cobertura@latest
+  #     - go test -coverprofile=coverage.out -covermode=count ./...
+  #     - go tool cover -func=coverage.out
+  #     - gocover-cobertura < coverage.out > coverage.xml
+  #   generates:
+  #     - coverage.out
+  #     - coverage.xml
 
-  test-watch:
-    desc: "Run tests in watch mode"
-    deps: [install-test-tools]
-    env:
-      KUBEBUILDER_ASSETS:
-        sh: "{{.LOCALBIN}}/setup-envtest use --bin-dir {{.LOCALBIN}} -p path"
-    cmds:
-      - gotestsum --watch --format testname ./...
+  # test-watch:
+  #   desc: "Run tests in watch mode"
+  #   deps: [install-test-tools]
+  #   env:
+  #     KUBEBUILDER_ASSETS:
+  #       sh: "{{.LOCALBIN}}/setup-envtest use --bin-dir {{.LOCALBIN}} -p path"
+  #   cmds:
+  #     - gotestsum --watch --format testname ./...
 
   ######################################################################
   # DOCKER COMMANDS
