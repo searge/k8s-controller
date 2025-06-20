@@ -1,13 +1,14 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
 	"os"
 
+	"github.com/Searge/k8s-controller/pkg/logger"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
+
+var logLevel string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -21,9 +22,11 @@ a README section with explanations and command history
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Initialize logger with the specified log level
+		logger.Init(logLevel)
+		log.Info().Str("version", "dev").Msg("Starting k8s-controller")
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -31,18 +34,16 @@ to quickly create a Cobra application.`,
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to execute command")
 		os.Exit(1)
 	}
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
+	// Global flags
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info",
+		"Log level (debug, info, warn, error, fatal, panic)")
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.k8s-controller.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
+	// Local flags
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

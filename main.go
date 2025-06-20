@@ -1,5 +1,5 @@
 /*
-Copyright © 2025 Sergij Boremchuk searge@duck.com
+Copyright © 2025 Sergij Boremchuk @Searge@hachyderm.io
 */
 package main
 
