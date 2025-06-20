@@ -43,15 +43,20 @@ tasks:
       - mkdir -p {{.LOCALBIN}}
     silent: true
 
-  format:
-    desc: "Format Go code"
+  tidy:
+    desc: Run `go mod tidy` on the project.
     cmds:
-      - gofmt -s -w ./
+      - go mod tidy
+
+  fmt:
+    desc: Format the codebase.
+    cmds:
+      - go fmt ./...
 
   lint:
-    desc: "Lint Go code"
+    desc: Run `golint` on the project.
     cmds:
-      - golint ./...
+      - go vet ./...
 
   build:
     desc: "Build the Go application"
