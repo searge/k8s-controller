@@ -441,3 +441,50 @@
           retries: 20
           delay: 6
           changed_when: false
+
+    - name: "Copy kubeconfig and check cluster health"
+      tags: ["leftovers"]
+      block:
+        - name: "Kubeconfigs | Create .kube directory for core user"
+          ansible.builtin.file:
+            path: "/var/home/core/.kube"
+            state: directory
+            owner: core
+            group: core
+            mode: '0700'
+
+        - name: "Kubeconfigs | Copy admin kubeconfig for core user"
+          ansible.builtin.copy:
+            remote_src: true
+            src: /var/roothome/.kube/config
+            dest: /var/home/core/.kube/config
+            owner: core
+            group: core
+            mode: '0600'
+
+        - name: "Verify | Wait for all control plane components to be healthy"
+          ansible.builtin.shell:
+            cmd: |
+              kubectl get nodes
+              kubectl get all -A
+              kubectl get --raw='/readyz?verbose'
+          register: health_check
+          until: health_check.rc == 0
+          retries: 20
+          delay: 5
+          changed_when: false
+
+        - name: "SUCCESS | Kubelet is ready"
+          ansible.builtin.debug:
+            var: health_check.stdout
+          when: health_check.rc == 0
+
+        - name: "FAILURE | Kubelet is not ready"
+          ansible.builtin.fail:
+            msg: "Kubelet is not ready"
+          when: health_check.rc != 0
+
+        - name: "CLEANUP | Remove wip directory"
+          ansible.builtin.file:
+            path: "{{ wip_dir}}"
+            state: absent
