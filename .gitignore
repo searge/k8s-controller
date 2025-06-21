@@ -5,3 +5,6 @@ bin
 coverage.*
 report.xml
 telemetry
+
+# Add VSCode Workspace
+!.vscode/K8sController.code-workspace

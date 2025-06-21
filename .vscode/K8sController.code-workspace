@@ -1,0 +1,157 @@
+{
+	"folders": [
+		{
+			"name": "k8s-controller",
+			"path": ".."
+		}
+	],
+	"settings": {
+		"go.testFlags": ["-v"],
+		"go.testTimeout": "30s",
+		"go.coverOnSave": true,
+		"go.coverageDecorator": {
+			"type": "gutter",
+			"coveredHighlightColor": "rgba(64,128,128,0.5)",
+			"uncoveredHighlightColor": "rgba(128,64,64,0.5)"
+		},
+		"go.lintOnSave": "package",
+		"go.formatTool": "goimports",
+		"files.exclude": {
+			"**/bin": true,
+			"**/*.log": true,
+			"**/coverage.*": true
+		}
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Debug Main Application",
+				"type": "go",
+				"request": "launch",
+				"mode": "debug",
+				"program": "${workspaceFolder}/main.go",
+				"args": ["--log-level=debug"],
+				"env": {},
+				"console": "integratedTerminal"
+			},
+			{
+				"name": "Debug with Info Level",
+				"type": "go",
+				"request": "launch",
+				"mode": "debug",
+				"program": "${workspaceFolder}/main.go",
+				"args": ["--log-level=info"],
+				"env": {},
+				"console": "integratedTerminal"
+			},
+			{
+				"name": "Debug Current Package Tests",
+				"type": "go",
+				"request": "launch",
+				"mode": "test",
+				"program": "${fileDirname}",
+				"args": ["-test.v"],
+				"env": {},
+				"console": "integratedTerminal"
+			},
+			{
+				"name": "Debug Current Test Function",
+				"type": "go",
+				"request": "launch",
+				"mode": "test",
+				"program": "${fileDirname}",
+				"args": ["-test.run", "^${selectedText}$", "-test.v"],
+				"env": {},
+				"console": "integratedTerminal"
+			},
+			{
+				"name": "Debug Logger Package",
+				"type": "go",
+				"request": "launch",
+				"mode": "test",
+				"program": "${workspaceFolder}/pkg/logger",
+				"args": ["-test.v"],
+				"env": {},
+				"console": "integratedTerminal"
+			},
+			{
+				"name": "Debug with Breakpoint Demo",
+				"type": "go",
+				"request": "launch",
+				"mode": "debug",
+				"program": "${workspaceFolder}/main.go",
+				"args": ["--log-level=debug"],
+				"env": {},
+				"console": "integratedTerminal",
+				"stopOnEntry": false,
+				"showLog": true
+			}
+		]
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "go: build",
+				"type": "shell",
+				"command": "go",
+				"args": ["build", "-o", "k8s-controller", "main.go"],
+				"group": "build",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"panel": "new"
+				},
+				"problemMatcher": "$go"
+			},
+			{
+				"label": "go: test all",
+				"type": "shell",
+				"command": "go",
+				"args": ["test", "-v", "./..."],
+				"group": "test",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"panel": "new"
+				},
+				"problemMatcher": "$go"
+			},
+			{
+				"label": "go: test with coverage",
+				"type": "shell",
+				"command": "go",
+				"args": ["test", "-coverprofile=coverage.out", "-v", "./..."],
+				"group": "test",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"panel": "new"
+				},
+				"problemMatcher": "$go"
+			},
+			{
+				"label": "task: provision k8s",
+				"type": "shell",
+				"command": "task",
+				"args": ["ssh", "--", "cd /srv/app && go-task provision"],
+				"group": "build",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"panel": "new"
+				}
+			}
+		]
+	},
+	"extensions": {
+		"recommendations": [
+			"golang.go",
+			"ms-vscode.test-adapter-converter",
+			"hbenl.vscode-test-explorer",
+			"ryanluker.vscode-coverage-gutters",
+			"task.vscode-task"
+		]
+	}
+}
