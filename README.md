@@ -17,6 +17,13 @@ This project follows [the step-by-step tutorial](https://github.com/den-vasyliev
 
 ## Quick Start
 
+### Prerequisites
+
+- **Go 1.23.1+** - [Installation guide](https://golang.org/doc/install)
+- **Taskfile** - [Installation guide](https://taskfile.dev/installation/)
+- **Podman** - [Installation guide](https://podman.io/getting-started/installation)
+- **Docker** (optional) - Alternative to Podman
+
 ### One-Command Setup
 
 Get a complete Kubernetes development environment running in seconds:
@@ -76,25 +83,28 @@ task rm           # Remove the machine
 
 ## Progress
 
-- [x] Golang CLI Application using Cobra
-- [x] Automated Kubernetes cluster setup with Ansible
-- [x] Podman machine integration with volume mounts
-- [x] Complete PKI infrastructure with certificate generation
-- [x] Taskfile automation for development workflow
-- [ ] Zerolog for structured logging
-- [ ] pflag for CLI log level flags
-- [ ] FastHTTP server command
-- [ ] Makefile, Dockerfile, GitHub Workflow
-- [ ] List Kubernetes Deployments with client-go
-- [ ] Deployment Informer with client-go
-- [ ] JSON API Endpoint for deployments
-- [ ] controller-runtime Deployment Controller
-- [ ] Leader Election and Metrics
-- [ ] Custom Resource (FrontendPage CRD)
-- [ ] Platform API (CRUD + Swagger)
-- [ ] MCP Integration
-- [ ] JWT Authentication
-- [ ] OpenTelemetry Instrumentation
+- [x] **Foundation**
+  - [x] Golang CLI Application using Cobra
+  - [x] Structured logging with zerolog
+  - [x] HTTP server with FastHTTP
+  - [x] Comprehensive testing suite
+  - [x] Quality assurance with linters
+  - [x] Development environment automation
+  - [x] Documentation and examples
+
+- [ ] **Kubernetes Integration** (Next Steps)
+  - [ ] List Kubernetes Deployments with client-go
+  - [ ] Deployment Informer with client-go
+  - [ ] JSON API Endpoint for deployments
+  - [ ] controller-runtime Deployment Controller
+  - [ ] Leader Election and Metrics
+
+- [ ] **Advanced Features** (Future)
+  - [ ] Custom Resource (FrontendPage CRD)
+  - [ ] Platform API (CRUD + Swagger)
+  - [ ] JWT Authentication
+  - [ ] OpenTelemetry Instrumentation
+  - [ ] Helm Charts and GitOps
 
 ## Architecture
 
@@ -137,12 +147,19 @@ C4Container
 └── README.md            # This file
 ```
 
-## Dependencies
+## 📚 Documentation
 
-- **CLI**: cobra, pflag, zerolog
-- **HTTP**: fasthttp
-- **Kubernetes**: client-go, controller-runtime
-- **Infrastructure**: Podman, Ansible, Taskfile
-- **Observability**: OpenTelemetry, Prometheus metrics
-- **Auth**: JWT tokens
-- **Build**: Docker, GitHub Actions
+- **[API Documentation](docs/api.md)** - HTTP endpoints and CLI commands
+
+## 🔗 Resources
+
+- **Course**: [Kubernetes Controllers Crash Course](https://fwdays.com/event/kubernetes-controllers-course)
+- **Reference**: [Tutorial Reference Implementation](https://github.com/den-vasyliev/k8s-controller-tutorial-ref)
+- **Go Style**: [Google Go Style Guide](https://google.github.io/styleguide/go/guide)
+- **Kubernetes**: [client-go Documentation](https://pkg.go.dev/k8s.io/client-go)
+
+## 📄 License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+**Built with ❤️ by [@Searge](https://github.com/Searge)**
