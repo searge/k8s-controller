@@ -48,7 +48,11 @@ func TestServerHandlers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create in-memory listener for testing
 			ln := fasthttputil.NewInmemoryListener()
-			defer ln.Close()
+			defer func() {
+				if err := ln.Close(); err != nil {
+					t.Errorf("Failed to close listener: %v", err)
+				}
+			}()
 
 			// Start server using our actual handler logic
 			go func() {
@@ -65,7 +69,7 @@ func TestServerHandlers(t *testing.T) {
 
 			// Create client with custom dialer for in-memory connection
 			client := &fasthttp.Client{
-				Dial: func(addr string) (net.Conn, error) {
+				Dial: func(_ string) (net.Conn, error) {
 					return ln.Dial()
 				},
 			}

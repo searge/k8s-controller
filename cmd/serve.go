@@ -30,7 +30,7 @@ Examples:
   k8s-controller serve
   k8s-controller serve --port=9090
   k8s-controller serve --port=8080 --log-level=debug`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		// The logger is already configured with the correct level from root.go
 		if err := server.Start(serverPort, log.Logger); err != nil {
 			log.Error().Err(err).Msg("Failed to start server")
