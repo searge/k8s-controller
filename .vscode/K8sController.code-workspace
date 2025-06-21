@@ -16,11 +16,6 @@
 		},
 		"go.lintOnSave": "package",
 		"go.formatTool": "goimports",
-		"files.exclude": {
-			"**/bin": true,
-			"**/*.log": true,
-			"**/coverage.*": true
-		}
 	},
 	"launch": {
 		"version": "0.2.0",

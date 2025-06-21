@@ -69,6 +69,11 @@ tasks:
     cmds:
       - go test -v ./...
 
+  coverage:
+    desc: Run tests with coverage report.
+    cmds:
+      - go test -coverprofile=coverage.out -covermode=count ./...
+
   lint:
     desc: Run `golint` on the project.
     cmds:
