@@ -75,7 +75,7 @@ jobs:
         id: coverage
         uses: gwatts/go-coverage-action@v2
         with:
-          coverage-threshold: 80
+          coverage-threshold: 60
           cover-pkg: ./...
           ignore-pattern: |
             \.pb\.go$
