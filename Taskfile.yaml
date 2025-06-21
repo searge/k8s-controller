@@ -7,6 +7,15 @@ env:
   ANSIBLE_CONFIG: "{{.USER_WORKING_DIR}}/ansible/ansible.cfg"
   APP_DIR: "/srv/app"
   VM_NAME: "dev"
+  DOCKER_BIN:
+    sh: |
+      if command -v docker &> /dev/null; then
+          echo "docker"
+      elif command -v podman &> /dev/null; then
+          echo "podman"
+      else
+          echo "docker" # Запасний варіант, якщо нічого не знайдено (викине помилку пізніше, якщо 'docker' не існує)
+      fi
   APP_NAME: "k8s-controller"
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
@@ -64,6 +73,19 @@ tasks:
     desc: Run `golint` on the project.
     cmds:
       - go vet ./...
+
+  golangci-lint:
+    aliases:
+      - golangci
+      - golint
+    desc: Run `golangci-lint run` on the project.
+    cmds:
+      - >-
+        {{.DOCKER_BIN}} run -t --rm
+        -v $(pwd):/app
+        -w /app
+        golangci/golangci-lint:v2.1.6
+        golangci-lint run {{.CLI_ARGS}}
 
   build:
     desc: "Build the Go application"
@@ -144,13 +166,13 @@ tasks:
   docker-build:
     desc: "Build Docker image"
     cmds:
-      - docker build --build-arg VERSION={{.VERSION}} -t {{.APP_NAME}}:latest .
-      - docker build --build-arg VERSION={{.VERSION}} -t {{.APP_NAME}}:{{.VERSION}} .
+      - "{{.DOCKER_BIN}} build --build-arg VERSION={{.VERSION}} -t {{.APP_NAME}}:latest ."
+      - "{{.DOCKER_BIN}} build --build-arg VERSION={{.VERSION}} -t {{.APP_NAME}}:{{.VERSION}} ."
 
   docker-run:
     desc: "Run Docker container"
     cmds:
-      - docker run --rm -it {{.APP_NAME}}:latest {{.CLI_ARGS}}
+      - "{{.DOCKER_BIN}} run --rm -it {{.APP_NAME}}:latest {{.CLI_ARGS}}"
 
   ######################################################################
   # DEVELOPMENT WORKFLOW
