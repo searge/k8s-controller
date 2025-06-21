@@ -1,3 +1,5 @@
+// Package cmd contains the CLI commands for the k8s-controller application.
+// This file implements the 'serve' command which starts the HTTP server.
 package cmd
 
 import (
@@ -9,19 +11,35 @@ import (
 	"github.com/Searge/k8s-controller/pkg/server"
 )
 
+// serverPort holds the port number for the HTTP server, configured via CLI flag.
 var serverPort int
 
+// serveCmd represents the serve command which starts the HTTP server.
+// It accepts a --port flag to specify which port to bind to (default: 8080).
+// The command will block until the server encounters an error or is terminated.
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start HTTP server",
+	Long: `Start the HTTP server with health check and debug endpoints.
+
+The server provides the following endpoints:
+  - GET /health: Health check endpoint returning JSON status
+  - GET /*: Default greeting message for all other paths
+
+Examples:
+  k8s-controller serve
+  k8s-controller serve --port=9090
+  k8s-controller serve --port=8080 --log-level=debug`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := server.Start(serverPort); err != nil {
+		// The logger is already configured with the correct level from root.go
+		if err := server.Start(serverPort, log.Logger); err != nil {
 			log.Error().Err(err).Msg("Failed to start server")
 			os.Exit(1)
 		}
 	},
 }
 
+// init registers the serve command with the root command and configures its flags.
 func init() {
 	rootCmd.AddCommand(serveCmd)
 	serveCmd.Flags().IntVar(&serverPort, "port", 8080, "Port to run the server on")
