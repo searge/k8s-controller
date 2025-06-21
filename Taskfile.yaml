@@ -79,6 +79,11 @@ tasks:
     cmds:
       - go vet ./...
 
+  revive:
+    desc: Run `revive` lint on the project.
+    cmds:
+      - revive -config .config/revive.toml -formatter friendly ./...
+
   golangci-lint:
     aliases:
       - golangci
