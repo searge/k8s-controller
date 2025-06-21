@@ -55,32 +55,32 @@ tasks:
     silent: true
 
   tidy:
-    desc: Run `go mod tidy` on the project.
+    desc: "Run `go mod tidy` on the project."
     cmds:
       - go mod tidy
 
   fmt:
-    desc: Format the codebase.
+    desc: "Format the codebase."
     cmds:
       - go fmt ./...
 
   test:
-    desc: Run tests across the project.
+    desc: "Run tests across the project."
     cmds:
       - go test -v ./...
 
   coverage:
-    desc: Run tests with coverage report.
+    desc: "Run tests with coverage report."
     cmds:
       - go test -coverprofile=coverage.out -covermode=count ./...
 
   lint:
-    desc: Run `golint` on the project.
+    desc: "Run `golint` on the project."
     cmds:
       - go vet ./...
 
   revive:
-    desc: Run `revive` lint on the project.
+    desc: "Run `revive` lint on the project."
     cmds:
       - revive -config .config/revive.toml -formatter friendly ./...
 
@@ -88,7 +88,7 @@ tasks:
     aliases:
       - golangci
       - golint
-    desc: Run `golangci-lint run` on the project.
+    desc: "Run `golangci-lint run` on the project."
     cmds:
       - >-
         {{.DOCKER_BIN}} run -t --rm
@@ -96,6 +96,13 @@ tasks:
         -w /app
         golangci/golangci-lint:v2.1.6
         golangci-lint run {{.CLI_ARGS}}
+
+  linters:
+    desc: "Run all linters at once"
+    cmds:
+      - task: lint
+      - task: revive
+      - task: golangci-lint
 
   build:
     desc: "Build the Go application"
