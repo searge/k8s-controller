@@ -1,5 +1,7 @@
 ### Go template
 bin
 *.log
+*cache*
 coverage.*
 report.xml
+telemetry
