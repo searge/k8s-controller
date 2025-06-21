@@ -77,3 +77,7 @@ jobs:
         with:
           coverage-threshold: 80
           cover-pkg: ./...
+          ignore-pattern: |
+            \.pb\.go$
+            \_string\.go$
+            ^main\.go$
