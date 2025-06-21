@@ -1,3 +1,4 @@
+// Package logger provides structured logging functionality using zerolog.
 package logger
 
 import (
@@ -8,6 +9,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// TestInit verifies that the Init function correctly sets the global log level
+// for various input values including valid levels, invalid levels, and edge cases.
 func TestInit(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -44,6 +47,8 @@ func TestInit(t *testing.T) {
 	}
 }
 
+// TestGetLogger verifies that GetLogger returns a valid logger instance
+// and that the returned logger can be used for logging without panicking.
 func TestGetLogger(t *testing.T) {
 	// Initialize logger
 	Init("info")
@@ -61,12 +66,16 @@ func TestGetLogger(t *testing.T) {
 	logger.Info().Msg("test message")
 }
 
+// BenchmarkInit measures the performance of the Init function.
+// This helps ensure that logger initialization doesn't become a bottleneck.
 func BenchmarkInit(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		Init("info")
 	}
 }
 
+// BenchmarkGetLogger measures the performance of the GetLogger function.
+// This is important since GetLogger might be called frequently throughout the application.
 func BenchmarkGetLogger(b *testing.B) {
 	Init("info")
 	b.ResetTimer()
@@ -74,4 +83,46 @@ func BenchmarkGetLogger(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		GetLogger()
 	}
+}
+
+// ExampleInit demonstrates basic usage of the Init function
+// with different log levels.
+func ExampleInit() {
+	// Initialize logger with info level
+	Init("info")
+
+	// Initialize logger with debug level for development
+	Init("debug")
+
+	// Initialize logger with error level for production
+	Init("error")
+
+	// Output:
+}
+
+// ExampleGetLogger demonstrates how to get and use a logger instance.
+func ExampleGetLogger() {
+	// First initialize the logger
+	Init("info")
+
+	// Get a logger instance
+	logger := GetLogger()
+
+	// Use the logger
+	logger.Info().Str("component", "example").Msg("Application started")
+	logger.Debug().Int("count", 42).Msg("Processing items")
+
+	// Output:
+}
+
+// ExampleInit_withInvalidLevel demonstrates that invalid log levels
+// default to info level gracefully.
+func ExampleInit_withInvalidLevel() {
+	// Invalid levels default to info
+	Init("invalid-level")
+
+	logger := GetLogger()
+	logger.Info().Msg("This will be logged at info level")
+
+	// Output:
 }

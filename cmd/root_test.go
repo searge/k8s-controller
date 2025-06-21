@@ -1,3 +1,4 @@
+// Package cmd implements the command-line interface for the k8s-controller application.
 package cmd
 
 import (
@@ -7,14 +8,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// TestRootCmd verifies that the root command can be executed without errors
+// with various log level configurations. This ensures basic CLI functionality works.
 func TestRootCmd(t *testing.T) {
 	// Test that the root command can be executed without errors
 	cmd := &cobra.Command{
 		Use: "test",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		PersistentPreRun: func(_ *cobra.Command, _ []string) {
 			// Mock the logger initialization to avoid side effects
 		},
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			// Do nothing
 		},
 	}
@@ -52,6 +55,8 @@ func TestRootCmd(t *testing.T) {
 	}
 }
 
+// TestLogLevelFlag verifies that the log-level flag is parsed correctly
+// in different formats (--log-level=value, --log-level value, default).
 func TestLogLevelFlag(t *testing.T) {
 	// Reset the root command for testing
 	testCmd := &cobra.Command{Use: "test"}

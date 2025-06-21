@@ -1,3 +1,5 @@
+// Package logger provides structured logging functionality using zerolog.
+// It offers a simple interface for initializing and configuring application-wide logging.
 package logger
 
 import (
@@ -8,7 +10,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Init initializes the global logger with the specified level
+// Init initializes the global logger with the specified level.
+// Supported levels: debug, info, warn/warning, error, fatal, panic.
+// If an invalid level is provided, defaults to info level.
+// The logger is configured to use console output for better readability.
 func Init(level string) {
 	// Configure zerolog to use console writer for better readability
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
@@ -34,7 +39,9 @@ func Init(level string) {
 	log.Debug().Str("level", level).Msg("Logger initialized")
 }
 
-// GetLogger returns a logger instance
+// GetLogger returns the configured logger instance.
+// This logger inherits the global configuration set by Init().
+// It's safe to call this function multiple times and from multiple goroutines.
 func GetLogger() zerolog.Logger {
 	return log.Logger
 }
