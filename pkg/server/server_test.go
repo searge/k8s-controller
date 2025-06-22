@@ -16,6 +16,9 @@ import (
 	"github.com/valyala/fasthttp/fasthttputil"
 )
 
+// HelloMessage is the default message returned by the server.
+const HelloMessage = "Hello from k8s-controller!"
+
 // TestCreateHandler tests the HTTP request routing and response generation
 // for all supported endpoints. It directly tests the handler function
 // without network dependencies.
@@ -39,14 +42,14 @@ func TestCreateHandler(t *testing.T) {
 			path:           "/",
 			method:         "GET",
 			expectedStatus: 200,
-			expectedBody:   "Hello from k8s-controller!",
+			expectedBody:   HelloMessage,
 		},
 		{
 			name:           "unknown endpoint",
 			path:           "/unknown",
 			method:         "GET",
 			expectedStatus: 200,
-			expectedBody:   "Hello from k8s-controller!",
+			expectedBody:   HelloMessage,
 		},
 	}
 
@@ -154,16 +157,84 @@ func TestStart(t *testing.T) {
 	})
 }
 
+// testCase represents a single test case for server endpoint testing.
+type testCase struct {
+	name           string
+	path           string
+	expectedStatus int
+	expectedBody   string
+}
+
+// setupInMemoryServer creates and starts an in-memory server for testing.
+// It returns a cleanup function that should be called when done.
+func setupInMemoryServer(t *testing.T) (*fasthttp.Client, func()) {
+	// Create in-memory listener for testing
+	ln := fasthttputil.NewInmemoryListener()
+
+	// Start server using our actual handler logic
+	go func() {
+		// Create a test logger that writes to stderr
+		logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+		handler := createHandler(logger)
+		if err := fasthttp.Serve(ln, handler); err != nil {
+			t.Errorf("Failed to serve: %v", err)
+		}
+	}()
+
+	// Give server time to start
+	time.Sleep(10 * time.Millisecond)
+
+	// Create client with custom dialer for in-memory connection
+	client := &fasthttp.Client{
+		Dial: func(_ string) (net.Conn, error) {
+			return ln.Dial()
+		},
+	}
+
+	cleanup := func() {
+		if err := ln.Close(); err != nil {
+			t.Errorf("Failed to close listener: %v", err)
+		}
+	}
+
+	return client, cleanup
+}
+
+// executeTestRequest executes a single HTTP request and verifies the response.
+func executeTestRequest(t *testing.T, client *fasthttp.Client, tc testCase) {
+	// Prepare HTTP request
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	req.SetRequestURI(tc.path)
+	req.Header.SetMethod("GET")
+	req.Header.SetHost("localhost") // FastHTTP requires Host header
+
+	// Execute the request
+	err := client.Do(req, resp)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+
+	// Verify response status code
+	if resp.StatusCode() != tc.expectedStatus {
+		t.Errorf("Expected status %d, got %d", tc.expectedStatus, resp.StatusCode())
+	}
+
+	// Verify response body content
+	body := string(resp.Body())
+	if body != tc.expectedBody {
+		t.Errorf("Expected body %q, got %q", tc.expectedBody, body)
+	}
+}
+
 // TestServerHandlers tests the HTTP request routing and response generation
 // for all supported endpoints. It uses an in-memory listener to avoid
 // binding to real network ports during testing.
 func TestServerHandlers(t *testing.T) {
-	tests := []struct {
-		name           string
-		path           string
-		expectedStatus int
-		expectedBody   string
-	}{
+	tests := []testCase{
 		{
 			name:           "health endpoint",
 			path:           "/health",
@@ -174,72 +245,24 @@ func TestServerHandlers(t *testing.T) {
 			name:           "default endpoint",
 			path:           "/",
 			expectedStatus: 200,
-			expectedBody:   "Hello from k8s-controller!",
+			expectedBody:   HelloMessage,
 		},
 		{
 			name:           "unknown endpoint",
 			path:           "/unknown",
 			expectedStatus: 200,
-			expectedBody:   "Hello from k8s-controller!",
+			expectedBody:   HelloMessage,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create in-memory listener for testing
-			ln := fasthttputil.NewInmemoryListener()
-			defer func() {
-				if err := ln.Close(); err != nil {
-					t.Errorf("Failed to close listener: %v", err)
-				}
-			}()
+	// Setup in-memory server once for all tests
+	client, cleanup := setupInMemoryServer(t)
+	defer cleanup()
 
-			// Start server using our actual handler logic
-			go func() {
-				// Create a test logger that writes to stderr
-				logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-				handler := createHandler(logger)
-				if err := fasthttp.Serve(ln, handler); err != nil {
-					t.Errorf("Failed to serve: %v", err)
-				}
-			}()
-
-			// Give server time to start
-			time.Sleep(10 * time.Millisecond)
-
-			// Create client with custom dialer for in-memory connection
-			client := &fasthttp.Client{
-				Dial: func(_ string) (net.Conn, error) {
-					return ln.Dial()
-				},
-			}
-
-			// Prepare HTTP request
-			req := fasthttp.AcquireRequest()
-			resp := fasthttp.AcquireResponse()
-			defer fasthttp.ReleaseRequest(req)
-			defer fasthttp.ReleaseResponse(resp)
-
-			req.SetRequestURI(tt.path)
-			req.Header.SetMethod("GET")
-			req.Header.SetHost("localhost") // FastHTTP requires Host header
-
-			// Execute the request
-			err := client.Do(req, resp)
-			if err != nil {
-				t.Fatalf("Failed to make request: %v", err)
-			}
-
-			// Verify response status code
-			if resp.StatusCode() != tt.expectedStatus {
-				t.Errorf("Expected status %d, got %d", tt.expectedStatus, resp.StatusCode())
-			}
-
-			// Verify response body content
-			body := string(resp.Body())
-			if body != tt.expectedBody {
-				t.Errorf("Expected body %q, got %q", tt.expectedBody, body)
-			}
+	// Run all test cases
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			executeTestRequest(t, client, tc)
 		})
 	}
 }
