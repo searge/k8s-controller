@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -15,21 +16,11 @@ func TestVersionCmd(t *testing.T) {
 	// Create a buffer to capture output
 	var out bytes.Buffer
 
-	// Create a new root command for testing to avoid side effects
-	testRootCmd := &cobra.Command{Use: "test"}
-	testVersionCmd := &cobra.Command{
-		Use:   "version",
-		Short: "Print the version number",
-		Run: func(_ *cobra.Command, _ []string) {
-			out.WriteString("k8s-controller version dev\n")
-		},
-	}
+	// Use getVersionCmd helper to create isolated version command
+	cmd := getVersionCmd(&out)
+	cmd.SetArgs([]string{})
 
-	testRootCmd.AddCommand(testVersionCmd)
-	testRootCmd.SetOut(&out)
-	testRootCmd.SetArgs([]string{"version"})
-
-	err := testRootCmd.Execute()
+	err := cmd.Execute()
 	if err != nil {
 		t.Errorf("version command failed: %v", err)
 	}
@@ -37,6 +28,18 @@ func TestVersionCmd(t *testing.T) {
 	output := out.String()
 	if !strings.Contains(output, "k8s-controller version") {
 		t.Errorf("Expected version output, got: %s", output)
+	}
+}
+
+// getVersionCmd creates an isolated copy of the version command with custom output.
+// This avoids side effects and allows testing the command logic independently.
+func getVersionCmd(out *bytes.Buffer) *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version number",
+		Run: func(_ *cobra.Command, _ []string) {
+			fmt.Fprintf(out, "k8s-controller version %s\n", Version)
+		},
 	}
 }
 
@@ -67,30 +70,25 @@ func TestVersionFlag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a test command that mimics version flag behavior
+			// Create isolated test command with version support
 			var out bytes.Buffer
-			testCmd := &cobra.Command{
-				Use: "test",
-				Run: func(_ *cobra.Command, _ []string) {
-					out.WriteString("k8s-controller version dev\n")
-				},
-			}
+			cmd := getVersionCmd(&out)
 
 			var showVersion bool
-			testCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show version")
+			cmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show version")
 
-			testCmd.SetOut(&out)
-			testCmd.SetArgs(tt.args)
+			cmd.SetOut(&out)
+			cmd.SetArgs(tt.args)
 
 			// Parse flags to set showVersion
-			err := testCmd.ParseFlags(tt.args)
+			err := cmd.ParseFlags(tt.args)
 			if err != nil {
 				t.Errorf("Flag parsing failed: %v", err)
 			}
 
 			// Simulate version flag behavior
 			if showVersion {
-				testCmd.Run(testCmd, []string{})
+				cmd.Run(cmd, []string{})
 				output := out.String()
 				if !strings.Contains(output, "k8s-controller version") {
 					t.Errorf("Expected version output, got: %s", output)
