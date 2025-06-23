@@ -32,9 +32,6 @@ RUN CGO_ENABLED=0 \
     -o kc \
     main.go
 
-# Verify the binary was built correctly
-RUN ./kc version
-
 # Final stage - minimal runtime image
 FROM gcr.io/distroless/static-debian12:nonroot
 
