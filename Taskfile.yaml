@@ -17,6 +17,7 @@ env:
           echo "docker" # Запасний варіант, якщо нічого не знайдено (викине помилку пізніше, якщо 'docker' не існує)
       fi
   APP_NAME: "k8s-controller"
+  BINARY_NAME: "kc"
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
   LOCALBIN: "{{.USER_WORKING_DIR}}/bin"
@@ -27,7 +28,7 @@ env:
 
 vars:
   BUILD_FLAGS: >-
-   -v -o {{.LOCALBIN}}/{{.APP_NAME}} -ldflags
+   -v -o {{.LOCALBIN}}/{{.BINARY_NAME}} -ldflags
    "-X=github.com/Searge/{{.APP_NAME}}/cmd.Version={{.VERSION}}"
   ENVTEST_VERSION: "release-0.19"
 
@@ -113,7 +114,7 @@ tasks:
     cmds:
       - go build {{.BUILD_FLAGS}} main.go
     generates:
-      - "{{.APP_NAME}}"
+      - "{{.BINARY_NAME}}"
 
   run:
     desc: "Run the Go application"
@@ -123,7 +124,6 @@ tasks:
   clean:
     desc: "Clean build artifacts"
     cmds:
-      - rm -f {{.APP_NAME}}
       - rm -f coverage.out coverage.xml report.xml
       - rm -rf {{.LOCALBIN}}
 
