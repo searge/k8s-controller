@@ -58,7 +58,4 @@ func init() {
 	// Version flags - using SetVersionTemplate for proper Cobra integration
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate("k8s-controller version {{.Version}}\n")
-
-	// Local flags
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
