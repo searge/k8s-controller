@@ -1,7 +1,7 @@
 # This workflow will build a golang project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
-name: Go tests
+name: "Go Tests"
 
 on:
   push:
@@ -81,3 +81,11 @@ jobs:
             \.pb\.go$
             \_string\.go$
             ^main\.go$
+
+  # Job that will be used as dependency for CI workflow
+  tests-complete:
+    runs-on: ubuntu-24.04
+    needs: [test, coverage]
+    steps:
+      - name: Tests completed successfully
+        run: echo "All tests have passed successfully"
