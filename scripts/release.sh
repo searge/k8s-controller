@@ -3,7 +3,7 @@
 # Release script for k8s-controller
 # This script helps create releases with proper changelog generation
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" &> /dev/null && pwd)
 PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
@@ -15,6 +15,12 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Git related
+current_branch=$(git branch --show-current)
+local_commit=$(git rev-parse HEAD)
+remote_commit=$(git rev-parse origin/main)
+current_version=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 
 # Helper functions
 log_info() {
@@ -46,8 +52,6 @@ check_git_cliff() {
 
 # Check if we're on main branch and up to date
 check_git_status() {
-    local current_branch=$(git branch --show-current)
-
     if [ "$current_branch" != "main" ]; then
         log_error "You must be on the main branch to create a release"
         exit 1
@@ -61,9 +65,6 @@ check_git_status() {
     log_info "Fetching latest changes..."
     git fetch origin
 
-    local local_commit=$(git rev-parse HEAD)
-    local remote_commit=$(git rev-parse origin/main)
-
     if [ "$local_commit" != "$remote_commit" ]; then
         log_error "Your local main branch is not up to date with origin/main"
         log_info "Please run: git pull origin main"
@@ -73,8 +74,6 @@ check_git_status() {
 
 # Get the next version
 get_next_version() {
-    local current_version=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-
     echo "Current version: $current_version"
     echo ""
     echo "What type of release is this?"
@@ -84,7 +83,7 @@ get_next_version() {
     echo "4) Custom version"
     echo ""
 
-    read -p "Enter your choice (1-4): " choice
+    read -pr "Enter your choice (1-4): " choice
 
     case $choice in
         1)
@@ -109,7 +108,7 @@ get_next_version() {
             next_version="v$((major + 1)).0.0"
             ;;
         4)
-            read -p "Enter custom version (e.g., v1.2.3): " next_version
+            read -pr "Enter custom version (e.g., v1.2.3): " next_version
             if [[ ! $next_version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                 log_error "Invalid version format. Use vX.Y.Z format."
                 exit 1
@@ -161,7 +160,7 @@ create_release() {
     generate_changelog "$version"
 
     # Ask for confirmation
-    read -p "Do you want to proceed with creating release $version? (y/N): " confirm
+    read -pr "Do you want to proceed with creating release $version? (y/N): " confirm
     if [[ $confirm != [yY] ]]; then
         log_warning "Release cancelled"
         exit 0
@@ -191,7 +190,7 @@ main() {
     check_git_cliff
     check_git_status
 
-    local version=$(get_next_version)
+    version=$(get_next_version)
 
     create_release "$version"
 }
