@@ -58,4 +58,8 @@ func init() {
 	// Version flags - using SetVersionTemplate for proper Cobra integration
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate("k8s-controller version {{.Version}}\n")
+
+	// Silence automatic help/usage output on errors since we already log them
+	rootCmd.SilenceUsage = true
+	rootCmd.SilenceErrors = true
 }
