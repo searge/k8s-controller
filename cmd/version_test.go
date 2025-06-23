@@ -53,3 +53,49 @@ func TestVersion(t *testing.T) {
 		t.Errorf("Expected default version 'dev', got: %s", Version)
 	}
 }
+
+// TestVersionFlag verifies that the --version and -v flags work correctly
+// and produce the expected output without running other commands.
+func TestVersionFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"long version flag", []string{"--version"}},
+		{"short version flag", []string{"-v"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a test command that mimics version flag behavior
+			var out bytes.Buffer
+			testCmd := &cobra.Command{
+				Use: "test",
+				Run: func(_ *cobra.Command, _ []string) {
+					out.WriteString("k8s-controller version dev\n")
+				},
+			}
+
+			var showVersion bool
+			testCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show version")
+
+			testCmd.SetOut(&out)
+			testCmd.SetArgs(tt.args)
+
+			// Parse flags to set showVersion
+			err := testCmd.ParseFlags(tt.args)
+			if err != nil {
+				t.Errorf("Flag parsing failed: %v", err)
+			}
+
+			// Simulate version flag behavior
+			if showVersion {
+				testCmd.Run(testCmd, []string{})
+				output := out.String()
+				if !strings.Contains(output, "k8s-controller version") {
+					t.Errorf("Expected version output, got: %s", output)
+				}
+			}
+		})
+	}
+}

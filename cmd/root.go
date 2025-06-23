@@ -3,8 +3,6 @@
 package cmd
 
 import (
-	"os"
-
 	"github.com/Searge/k8s-controller/pkg/logger"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -26,10 +24,19 @@ a README section with explanations and command history
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	PersistentPreRun: func(_ *cobra.Command, _ []string) {
+	PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+		// Skip logging for version command - it should be clean output
+		if cmd.Use == "version" {
+			return
+		}
+
 		// Initialize logger with the specified log level
 		logger.Init(logLevel)
 		log.Info().Str("version", Version).Msg("Starting k8s-controller")
+	},
+	Run: func(cmd *cobra.Command, _ []string) {
+		// If no subcommand is specified, show help
+		_ = cmd.Help()
 	},
 }
 
@@ -40,7 +47,6 @@ func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to execute command")
-		os.Exit(1)
 	}
 }
 
@@ -48,6 +54,10 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info",
 		"Log level (debug, info, warn, error, fatal, panic)")
+
+	// Version flags - using SetVersionTemplate for proper Cobra integration
+	rootCmd.Version = Version
+	rootCmd.SetVersionTemplate("k8s-controller version {{.Version}}\n")
 
 	// Local flags
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
