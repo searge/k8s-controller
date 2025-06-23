@@ -82,3 +82,7 @@ allowlist = ["id", "db", "tx", "ctx", "w", "r", "t", "f", "b", "wg", "mu", "rw"]
 
 [rule.string-of-int]
 # Prevents the common error of using `string(123)` which converts to a rune, not the string "123".
+
+[rule.indent-error-flow]
+[rule.exported]
+[rule.struct-tag]
