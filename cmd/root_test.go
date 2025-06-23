@@ -11,19 +11,12 @@ import (
 // TestRootCmd verifies that the root command can be executed without errors
 // with various log level configurations. This ensures basic CLI functionality works.
 func TestRootCmd(t *testing.T) {
-	// Test that the root command can be executed without errors
-	cmd := &cobra.Command{
-		Use: "test",
-		PersistentPreRun: func(_ *cobra.Command, _ []string) {
-			// Mock the logger initialization to avoid side effects
-		},
-		Run: func(_ *cobra.Command, _ []string) {
-			// Do nothing
-		},
-	}
-
-	// Add the log-level flag
-	cmd.PersistentFlags().String("log-level", "info", "Log level")
+	// Test the actual root command
+	cmd := rootCmd
+	// Ensure we reset any global state after the test
+	defer func() {
+		// reset logger or other gloabal state if needed
+	}()
 
 	// Execute command with different log levels
 	tests := []struct {
@@ -35,17 +28,14 @@ func TestRootCmd(t *testing.T) {
 		{"info log level", []string{"--log-level=info"}},
 		{"error log level", []string{"--log-level=error"}},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Capture output
 			var out bytes.Buffer
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
-
 			// Set args
 			cmd.SetArgs(tt.args)
-
 			// Execute command
 			err := cmd.Execute()
 			if err != nil {
