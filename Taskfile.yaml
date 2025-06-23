@@ -28,7 +28,7 @@ env:
 vars:
   BUILD_FLAGS: >-
    -v -o {{.LOCALBIN}}/{{.APP_NAME}} -ldflags
-   "-X=github.com/Searge/{{.APP_NAME}}/cmd.appVersion={{.VERSION}}"
+   "-X=github.com/Searge/{{.APP_NAME}}/cmd.Version={{.VERSION}}"
   ENVTEST_VERSION: "release-0.19"
 
 tasks:
@@ -106,7 +106,10 @@ tasks:
 
   build:
     desc: "Build the Go application"
-    deps: [setup]
+    deps:
+      - fmt
+      - tidy
+      - setup
     cmds:
       - go build {{.BUILD_FLAGS}} main.go
     generates:
