@@ -74,53 +74,67 @@ check_git_status() {
 
 # Get the next version
 get_next_version() {
+    echo ""
     echo "Current version: $current_version"
     echo ""
     echo "What type of release is this?"
-    echo "1) Patch (bug fixes)          - ${current_version} -> ${current_version%.*}.$((${current_version##*.} + 1))"
-    echo "2) Minor (new features)       - ${current_version} -> ${current_version%.*.*}.$((${current_version##*.*.} + 1)).0"
-    echo "3) Major (breaking changes)   - ${current_version} -> v$((${current_version#v*.*.*} + 1)).0.0"
-    echo "4) Custom version"
+    echo "1) Patch (bug fixes)     - example: v0.1.0 -> v0.1.1"
+    echo "2) Minor (new features)  - example: v0.1.0 -> v0.2.0"
+    echo "3) Major (breaking)      - example: v0.1.0 -> v1.0.0"
+    echo "4) Custom version        - enter manually"
     echo ""
+    echo -n "Enter your choice (1-4): "
 
-    read -rp "Enter your choice (1-4): " choice
+    read -r choice
+    echo ""
 
     case $choice in
         1)
-            # Patch version
-            local version_num=${current_version#v}
-            local patch=${version_num##*.}
-            local base=${version_num%.*}
-            next_version="v${base}.$((patch + 1))"
+            # Patch version - increment last number
+            if [[ $current_version =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                major="${BASH_REMATCH[1]}"
+                minor="${BASH_REMATCH[2]}"
+                patch="${BASH_REMATCH[3]}"
+                next_version="v${major}.${minor}.$((patch + 1))"
+            else
+                next_version="v0.0.1"
+            fi
             ;;
         2)
-            # Minor version
-            local version_num=${current_version#v}
-            local minor=${version_num%.*}
-            minor=${minor##*.}
-            local major=${version_num%%.*}
-            next_version="v${major}.$((minor + 1)).0"
+            # Minor version - increment middle number, reset patch to 0
+            if [[ $current_version =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                major="${BASH_REMATCH[1]}"
+                minor="${BASH_REMATCH[2]}"
+                next_version="v${major}.$((minor + 1)).0"
+            else
+                next_version="v0.1.0"
+            fi
             ;;
         3)
-            # Major version
-            local version_num=${current_version#v}
-            local major=${version_num%%.*}
-            next_version="v$((major + 1)).0.0"
+            # Major version - increment first number, reset others to 0
+            if [[ $current_version =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                major="${BASH_REMATCH[1]}"
+                next_version="v$((major + 1)).0.0"
+            else
+                next_version="v1.0.0"
+            fi
             ;;
         4)
-            read -rp "Enter custom version (e.g., v1.2.3): " next_version
+            echo -n "Enter custom version (e.g., v1.2.3): "
+            read -r next_version
             if [[ ! $next_version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                 log_error "Invalid version format. Use vX.Y.Z format."
                 exit 1
             fi
             ;;
         *)
-            log_error "Invalid choice"
+            log_error "Invalid choice. Please enter 1, 2, 3, or 4."
             exit 1
             ;;
     esac
 
-    echo "$next_version"
+    echo "Selected version: $next_version"
+    echo ""
 }
 
 # Generate changelog
@@ -186,6 +200,8 @@ create_release() {
 # Main script
 main() {
     log_info "Starting release process for k8s-controller..."
+    log_info "Debug: Current branch: $current_branch"
+    log_info "Debug: Current version: $current_version"
 
     check_git_cliff
     check_git_status
