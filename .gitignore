@@ -1,5 +1,11 @@
 ### Go template
 bin
 *.log
+*cache*
 coverage.*
 report.xml
+telemetry
+tmp
+
+# Add VSCode Workspace
+!.vscode/K8sController.code-workspace

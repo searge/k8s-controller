@@ -1,0 +1,10 @@
+* @searge
+
+# Go source code - ensure course instructors review all Go implementations
+*.go @den-vasyliev @Alex0M
+go.mod @den-vasyliev @Alex0M
+go.sum @den-vasyliev @Alex0M
+
+# Core application directories
+/cmd/ @den-vasyliev @Alex0M
+/pkg/ @den-vasyliev @Alex0M

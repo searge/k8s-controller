@@ -1,0 +1,88 @@
+# Global revive settings.
+# "error" will fail CI/CD pipelines, "warning" will only show warnings.
+severity = "warning"
+
+# The minimum confidence level for a linting issue to be reported. 0.0 means report everything.
+min_confidence = 0.0
+
+# Rules that are globally disabled can be listed here.
+# disable_all_rules = false
+
+
+# --- Section: Imports & Formatting ---
+
+[rule.blank-imports]
+# Allows blank imports (e.g., for database/sql drivers), which is idiomatic.
+
+[rule.dot-imports]
+# Forbids dot imports.
+# Google Style Guide: "Do not use dot imports".
+severity = "error"
+
+[rule.line-length-limit]
+# Google Style Guide: "Go has no line length limit," but it recommends avoiding
+# overly long lines. 120 is a common and reasonable community standard.
+arguments = [120]
+
+
+# --- Section: Naming Conventions (Style Guide: Naming) ---
+
+[rule.package-comments]
+# Requires a package comment in the format `// Package <name> ...`
+# Google Style Guide: "All packages should have a package comment."
+
+[rule.var-naming]
+# Enforces MixedCaps (camelCase/PascalCase) for variable names.
+# Google Style Guide: "Names in Go should be short... use MixedCaps".
+# The allowlist includes common, idiomatic exceptions.
+allowlist = ["id", "db", "tx", "ctx", "w", "r", "t", "f", "b", "wg", "mu", "rw"]
+
+[rule.error-naming]
+# Requires that variables of type error be named `err` or `*Err`.
+
+
+# --- Section: Comments (Style Guide: Comments) ---
+
+[rule.error-return]
+# Checks that errors returned from function calls are not ignored. A fundamental Go practice.
+
+[rule.error-strings]
+# Checks that error strings are not capitalized and do not end with punctuation.
+# Google Style Guide: "Error strings should not be capitalized...".
+
+
+# --- Section: Best Practices & Code Quality ---
+
+[rule.unreachable-code]
+# Detects code that will never be executed.
+
+[rule.unused-parameter]
+# Finds unused function parameters. The Style Guide advises removing them.
+
+[rule.waitgroup-by-value]
+# Prevents a common concurrency bug where `sync.WaitGroup` is passed by value.
+
+[rule.atomic]
+# Checks for incorrect usage of the `sync/atomic` package.
+
+[rule.defer]
+# Checks for common mistakes in deferred calls, like deferring `rows.Close()` without checking the error.
+
+[rule.context-as-argument]
+# Enforces the standard convention that `context.Context` should be the first argument.
+
+[rule.context-keys-type]
+# Enforces that custom types should be used for context keys.
+
+
+# --- Section: Common Pitfalls ---
+
+[rule.modifies-value-receiver]
+# Warns when a method with a value receiver attempts to modify the value.
+
+[rule.string-of-int]
+# Prevents the common error of using `string(123)` which converts to a rune, not the string "123".
+
+[rule.indent-error-flow]
+[rule.exported]
+[rule.struct-tag]
