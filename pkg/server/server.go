@@ -23,10 +23,12 @@ func createHandler(logger zerolog.Logger) func(ctx *fasthttp.RequestCtx) {
 		switch path {
 		case "/health":
 			ctx.SetStatusCode(200)
+			ctx.SetContentType("application/json")
 			if _, err := fmt.Fprintf(ctx, `{"status":"ok"}`); err != nil {
 				logger.Error().Err(err).Msg("Failed to write health response")
 			}
 		default:
+			ctx.SetContentType("text/plain")
 			if _, err := fmt.Fprintf(ctx, "Hello from k8s-controller!"); err != nil {
 				logger.Error().Err(err).Msg("Failed to write response")
 			}
