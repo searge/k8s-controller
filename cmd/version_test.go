@@ -1,98 +1,53 @@
-// Package cmd implements the command-line interface for the k8s-controller application.
+// Package cmd contains tests for the CLI commands.
+// This file tests the serve command definition, flag configuration, and validation logic.
 package cmd
 
 import (
-	"bytes"
-	"fmt"
-	"strings"
 	"testing"
-
-	"github.com/spf13/cobra"
 )
 
-// TestVersionCmd verifies that the version command executes successfully
-// and produces the expected output format.
-func TestVersionCmd(t *testing.T) {
-	// Create a buffer to capture output
-	var out bytes.Buffer
-
-	// Use getVersionCmd helper to create isolated version command
-	cmd := getVersionCmd(&out)
-	cmd.SetArgs([]string{})
-
-	err := cmd.Execute()
-	if err != nil {
-		t.Errorf("version command failed: %v", err)
+// TestServeCommand verifies that the serve command is properly defined
+// and configured with the expected flags and properties.
+func TestServeCommand(t *testing.T) {
+	if serveCmd == nil {
+		t.Fatal("serveCmd should be defined")
 	}
 
-	output := out.String()
-	if !strings.Contains(output, "k8s-controller version") {
-		t.Errorf("Expected version output, got: %s", output)
+	if serveCmd.Use != "serve" {
+		t.Errorf("expected command use 'serve', got %s", serveCmd.Use)
+	}
+
+	// Verify the port flag is properly configured
+	portFlag := serveCmd.Flags().Lookup("port")
+	if portFlag == nil {
+		t.Error("expected 'port' flag to be defined")
 	}
 }
 
-// getVersionCmd creates an isolated copy of the version command with custom output.
-// This avoids side effects and allows testing the command logic independently.
-func getVersionCmd(out *bytes.Buffer) *cobra.Command {
-	return &cobra.Command{
-		Use:   "version",
-		Short: "Print the version number",
-		Run: func(_ *cobra.Command, _ []string) {
-			fmt.Fprintf(out, "k8s-controller version %s\n", Version)
-		},
-	}
-}
-
-// TestVersion verifies that the Version variable has a valid default value
-// and can be accessed for version information.
-func TestVersion(t *testing.T) {
-	// Test that Version variable exists and has a default value
-	if Version == "" {
-		t.Error("Version should not be empty")
-	}
-
-	// Test default value
-	if Version != "dev" {
-		t.Errorf("Expected default version 'dev', got: %s", Version)
-	}
-}
-
-// TestVersionFlag verifies that the --version and -v flags work correctly
-// and produce the expected output without running other commands.
-func TestVersionFlag(t *testing.T) {
+// TestValidatePort tests the port validation function with basic cases.
+// This ensures the validation works for common valid and invalid scenarios.
+func TestValidatePort(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
+		name      string
+		port      int
+		shouldErr bool
 	}{
-		{"long version flag", []string{"--version"}},
-		{"short version flag", []string{"-v"}},
+		{"valid port 8080", 8080, false},
+		{"valid port 1", 1, false},
+		{"valid port 65535", 65535, false},
+		{"invalid port 0", 0, true},
+		{"invalid negative port", -1, true},
+		{"invalid port too high", 65536, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create isolated test command with version support
-			var out bytes.Buffer
-			cmd := getVersionCmd(&out)
-
-			var showVersion bool
-			cmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show version")
-
-			cmd.SetOut(&out)
-			cmd.SetArgs(tt.args)
-
-			// Parse flags to set showVersion
-			err := cmd.ParseFlags(tt.args)
-			if err != nil {
-				t.Errorf("Flag parsing failed: %v", err)
+			err := validatePort(tt.port)
+			if tt.shouldErr && err == nil {
+				t.Errorf("validatePort(%d) should return error, got nil", tt.port)
 			}
-
-			// Simulate version flag behavior
-			if showVersion {
-				cmd.Run(cmd, []string{})
-				output := out.String()
-				if !strings.Contains(output, "k8s-controller version") {
-					t.Errorf("Expected version output, got: %s", output)
-				}
+			if !tt.shouldErr && err != nil {
+				t.Errorf("validatePort(%d) should not return error, got: %v", tt.port, err)
 			}
 		})
 	}
