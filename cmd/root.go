@@ -29,7 +29,7 @@ to quickly create a Cobra application.`,
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		// Initialize logger with the specified log level
 		logger.Init(logLevel)
-		log.Info().Str("version", "dev").Msg("Starting k8s-controller")
+		log.Info().Str("version", Version).Msg("Starting k8s-controller")
 	},
 }
 

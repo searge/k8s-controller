@@ -40,16 +40,16 @@ func TestVersionCmd(t *testing.T) {
 	}
 }
 
-// TestAppVersion verifies that the appVersion variable has a valid default value
+// TestVersion verifies that the Version variable has a valid default value
 // and can be accessed for version information.
-func TestAppVersion(t *testing.T) {
-	// Test that appVersion variable exists and has a default value
-	if appVersion == "" {
-		t.Error("appVersion should not be empty")
+func TestVersion(t *testing.T) {
+	// Test that Version variable exists and has a default value
+	if Version == "" {
+		t.Error("Version should not be empty")
 	}
 
 	// Test default value
-	if appVersion != "dev" {
-		t.Errorf("Expected default version 'dev', got: %s", appVersion)
+	if Version != "dev" {
+		t.Errorf("Expected default version 'dev', got: %s", Version)
 	}
 }
