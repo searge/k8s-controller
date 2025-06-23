@@ -83,7 +83,7 @@ get_next_version() {
     echo "4) Custom version"
     echo ""
 
-    read -pr "Enter your choice (1-4): " choice
+    read -rp "Enter your choice (1-4): " choice
 
     case $choice in
         1)
@@ -108,7 +108,7 @@ get_next_version() {
             next_version="v$((major + 1)).0.0"
             ;;
         4)
-            read -pr "Enter custom version (e.g., v1.2.3): " next_version
+            read -rp "Enter custom version (e.g., v1.2.3): " next_version
             if [[ ! $next_version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                 log_error "Invalid version format. Use vX.Y.Z format."
                 exit 1
@@ -160,7 +160,7 @@ create_release() {
     generate_changelog "$version"
 
     # Ask for confirmation
-    read -pr "Do you want to proceed with creating release $version? (y/N): " confirm
+    read -rp "Do you want to proceed with creating release $version? (y/N): " confirm
     if [[ $confirm != [yY] ]]; then
         log_warning "Release cancelled"
         exit 0
