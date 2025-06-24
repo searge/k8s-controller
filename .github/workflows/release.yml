@@ -15,40 +15,24 @@ permissions:
   packages: write
 
 jobs:
-  # Check if we should proceed with release
-  check-trigger:
+  # Simple check: if security passed, we can release
+  check-security:
     runs-on: ubuntu-24.04
+    if: github.event.workflow_run.conclusion == 'success'
     outputs:
-      should-release: ${{ steps.check.outputs.should-release }}
-      version: ${{ steps.check.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Check release conditions
-        id: check
+      - name: Extract version from branch
+        id: version
         run: |
-          echo "Event: ${{ github.event_name }}"
-          echo "Workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
-          echo "Head branch: ${{ github.event.workflow_run.head_branch }}"
-
-          # Only proceed if security workflow succeeded and was triggered by a tag
-          if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
-            if [[ "${{ github.event.workflow_run.head_branch }}" == refs/tags/v* ]]; then
-              version="${{ github.event.workflow_run.head_branch }}"
-              echo "should-release=true" >> $GITHUB_OUTPUT
-              echo "version=${version}" >> $GITHUB_OUTPUT
-              echo "✅ Security checks passed for tag: ${version}"
-            else
-              echo "should-release=false" >> $GITHUB_OUTPUT
-              echo "❌ Not a tag push, skipping release"
-            fi
-          else
-            echo "should-release=false" >> $GITHUB_OUTPUT
-            echo "❌ Security checks failed, aborting release"
-          fi
+          # Security workflow only runs on tags, so head_branch is always a tag
+          version="${{ github.event.workflow_run.head_branch }}"
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "✅ Security checks passed for: ${version}"
 
   # Build binaries for multiple platforms
   build-binaries:
-    needs: check-trigger
-    if: needs.check-trigger.outputs.should-release == 'true'
+    needs: check-security
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -80,8 +64,6 @@ jobs:
             ext: ".exe"
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.check-trigger.outputs.version }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -97,7 +79,7 @@ jobs:
         run: |
           mkdir -p dist
           go build -v \
-            -ldflags "-w -s -X=github.com/Searge/k8s-controller/cmd.Version=${{ needs.check-trigger.outputs.version }}" \
+            -ldflags "-w -s -X=github.com/Searge/k8s-controller/cmd.Version=${{ needs.check-security.outputs.version }}" \
             -o dist/kc${{ matrix.ext }} \
             main.go
 
@@ -105,11 +87,9 @@ jobs:
         run: |
           cd dist
           if [[ "${{ matrix.platform }}" == "windows" ]]; then
-            # Use zip for Windows
             zip -r ../kc.${{ matrix.platform }}.${{ matrix.arch }}.zip kc${{ matrix.ext }}
           else
-            # Use tar.gz for Unix-like systems
-            tar -czf ../kc.${{ matrix.platform }}.${{ matrix.arch }}.tgz kc${{ matrix.ext }}
+            tar -czf ../kc.${{ matrix.platform }}.${{ matrix.arch }}.tar.gz kc${{ matrix.ext }}
           fi
           cd ..
           ls -la kc.*
@@ -122,13 +102,10 @@ jobs:
 
   # Build and push Docker images
   build-docker:
-    needs: check-trigger
-    if: needs.check-trigger.outputs.should-release == 'true'
+    needs: check-security
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.check-trigger.outputs.version }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -160,19 +137,16 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ needs.check-trigger.outputs.version }}
+            VERSION=${{ needs.check-security.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   # Create GitHub Release with all artifacts
   create-release:
     runs-on: ubuntu-24.04
-    needs: [check-trigger, build-binaries, build-docker]
-    if: needs.check-trigger.outputs.should-release == 'true'
+    needs: [check-security, build-binaries, build-docker]
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.check-trigger.outputs.version }}
 
       # Download all binary artifacts
       - name: Download all artifacts
@@ -191,7 +165,7 @@ jobs:
       - name: Extract changelog for this version
         id: changelog
         run: |
-          VERSION_NUMBER=$(echo "${{ needs.check-trigger.outputs.version }}" | sed 's/^.*v//')
+          VERSION_NUMBER=$(echo "${{ needs.check-security.outputs.version }}" | sed 's/^v//')
           if [ -f "CHANGELOG.md" ]; then
             awk '/^## \['"$VERSION_NUMBER"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > current_changelog.md
             if [ -s current_changelog.md ]; then
@@ -209,8 +183,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.check-trigger.outputs.version }}
-          name: Release ${{ needs.check-trigger.outputs.version }}
+          tag_name: ${{ needs.check-security.outputs.version }}
+          name: Release ${{ needs.check-security.outputs.version }}
           body: |
             ${{ steps.changelog.outputs.changelog }}
 
@@ -218,7 +192,7 @@ jobs:
 
             **Docker Image:**
             ```bash
-            docker pull ghcr.io/${{ github.repository }}:${{ needs.check-trigger.outputs.version }}
+            docker pull ghcr.io/${{ github.repository }}:${{ needs.check-security.outputs.version }}
             ```
 
             **Binary Archives:**
@@ -239,7 +213,7 @@ jobs:
             # Extract kc.windows.amd64.zip and add kc.exe to PATH
             ```
           draft: false
-          prerelease: ${{ contains(needs.check-trigger.outputs.version, '-') }}
+          prerelease: ${{ contains(needs.check-security.outputs.version, '-') }}
           files: |
             release-files/*
           generate_release_notes: true
