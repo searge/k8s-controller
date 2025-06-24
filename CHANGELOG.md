@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2025-06-24
+
+### 🐛 Bug/Lint Fixes
+
+- *(ci)* Correct release workflow security gate and binary packaging
+
 ## [0.4.0] - 2025-06-24
 
 ### 🚀 Features
