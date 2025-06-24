@@ -5,12 +5,6 @@ on:
     workflows: ["Security Checks"]
     types:
       - completed
-    branches:
-      - main
-  # Also trigger on tags for manual releases
-  push:
-    tags:
-      - 'v*.*.*'
 
 env:
   REGISTRY: ghcr.io
@@ -31,26 +25,24 @@ jobs:
       - name: Check release conditions
         id: check
         run: |
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/v* ]]; then
-            # Direct tag push
-            echo "should-release=true" >> $GITHUB_OUTPUT
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            # Security workflow completed
-            if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
-              # Check if this was triggered by a tag
-              if [[ "${{ github.event.workflow_run.head_branch }}" == refs/tags/v* ]]; then
-                echo "should-release=true" >> $GITHUB_OUTPUT
-                echo "version=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
-              else
-                echo "should-release=false" >> $GITHUB_OUTPUT
-              fi
+          echo "Event: ${{ github.event_name }}"
+          echo "Workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo "Head branch: ${{ github.event.workflow_run.head_branch }}"
+
+          # Only proceed if security workflow succeeded and was triggered by a tag
+          if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+            if [[ "${{ github.event.workflow_run.head_branch }}" == refs/tags/v* ]]; then
+              version="${{ github.event.workflow_run.head_branch }}"
+              echo "should-release=true" >> $GITHUB_OUTPUT
+              echo "version=${version}" >> $GITHUB_OUTPUT
+              echo "✅ Security checks passed for tag: ${version}"
             else
-              echo "Security checks failed, aborting release"
               echo "should-release=false" >> $GITHUB_OUTPUT
+              echo "❌ Not a tag push, skipping release"
             fi
           else
             echo "should-release=false" >> $GITHUB_OUTPUT
+            echo "❌ Security checks failed, aborting release"
           fi
 
   # Build binaries for multiple platforms
@@ -63,21 +55,33 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
-            suffix: linux-amd64
+            platform: linux
+            arch: amd64
+            ext: ""
           - goos: linux
             goarch: arm64
-            suffix: linux-arm64
+            platform: linux
+            arch: arm64
+            ext: ""
           - goos: darwin
             goarch: amd64
-            suffix: darwin-amd64
+            platform: darwin
+            arch: amd64
+            ext: ""
           - goos: darwin
             goarch: arm64
-            suffix: darwin-arm64
+            platform: darwin
+            arch: arm64
+            ext: ""
           - goos: windows
             goarch: amd64
-            suffix: windows-amd64.exe
+            platform: windows
+            arch: amd64
+            ext: ".exe"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-trigger.outputs.version }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -91,17 +95,30 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          mkdir -p bin
+          mkdir -p dist
           go build -v \
             -ldflags "-w -s -X=github.com/Searge/k8s-controller/cmd.Version=${{ needs.check-trigger.outputs.version }}" \
-            -o bin/kc-${{ matrix.suffix }} \
+            -o dist/kc${{ matrix.ext }} \
             main.go
 
-      - name: Upload binary artifact
+      - name: Create archive
+        run: |
+          cd dist
+          if [[ "${{ matrix.platform }}" == "windows" ]]; then
+            # Use zip for Windows
+            zip -r ../kc.${{ matrix.platform }}.${{ matrix.arch }}.zip kc${{ matrix.ext }}
+          else
+            # Use tar.gz for Unix-like systems
+            tar -czf ../kc.${{ matrix.platform }}.${{ matrix.arch }}.tgz kc${{ matrix.ext }}
+          fi
+          cd ..
+          ls -la kc.*
+
+      - name: Upload archive artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kc-${{ matrix.suffix }}
-          path: bin/kc-${{ matrix.suffix }}
+          name: kc-${{ matrix.platform }}-${{ matrix.arch }}
+          path: kc.${{ matrix.platform }}.${{ matrix.arch }}.*
 
   # Build and push Docker images
   build-docker:
@@ -110,6 +127,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-trigger.outputs.version }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -152,6 +171,8 @@ jobs:
     if: needs.check-trigger.outputs.should-release == 'true'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-trigger.outputs.version }}
 
       # Download all binary artifacts
       - name: Download all artifacts
@@ -163,14 +184,14 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release-files
-          find ./artifacts -name "kc-*" -type f -exec cp {} release-files/ \;
+          find ./artifacts -name "kc.*" -type f -exec cp {} release-files/ \;
           ls -la release-files/
 
       # Extract changelog
       - name: Extract changelog for this version
         id: changelog
         run: |
-          VERSION_NUMBER=$(echo "${{ needs.check-trigger.outputs.version }}" | sed 's/^v//')
+          VERSION_NUMBER=$(echo "${{ needs.check-trigger.outputs.version }}" | sed 's/^.*v//')
           if [ -f "CHANGELOG.md" ]; then
             awk '/^## \['"$VERSION_NUMBER"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > current_changelog.md
             if [ -s current_changelog.md ]; then
@@ -200,12 +221,23 @@ jobs:
             docker pull ghcr.io/${{ github.repository }}:${{ needs.check-trigger.outputs.version }}
             ```
 
-            **Binaries:**
-            - Linux (amd64): `kc-linux-amd64`
-            - Linux (arm64): `kc-linux-arm64`
-            - macOS (Intel): `kc-darwin-amd64`
-            - macOS (Apple Silicon): `kc-darwin-arm64`
-            - Windows (amd64): `kc-windows-amd64.exe`
+            **Binary Archives:**
+            - **Linux (amd64)**: `kc.linux.amd64.tar.gz`
+            - **Linux (arm64)**: `kc.linux.arm64.tar.gz`
+            - **macOS (Intel)**: `kc.darwin.amd64.tar.gz`
+            - **macOS (Apple Silicon)**: `kc.darwin.arm64.tar.gz`
+            - **Windows (amd64)**: `kc.windows.amd64.zip`
+
+            **Installation:**
+            ```bash
+            # Linux/macOS
+            tar -xzf kc.linux.amd64.tar.gz
+            chmod +x kc
+            sudo mv kc /usr/local/bin/
+
+            # Windows
+            # Extract kc.windows.amd64.zip and add kc.exe to PATH
+            ```
           draft: false
           prerelease: ${{ contains(needs.check-trigger.outputs.version, '-') }}
           files: |
