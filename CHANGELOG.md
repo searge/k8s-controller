@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2025-06-24
+
+### 🚀 Features
+
+- *(scripts)* Simplify release script to use git-cliff --bump
+
+### 🐛 Bug/Lint Fixes
+
+- *(docker)* Remove binary verification to support multi-arch builds
+
 ## [0.1.0] - 2025-06-23
 
 ### 🚀 Features
