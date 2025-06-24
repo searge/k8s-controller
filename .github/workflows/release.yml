@@ -1,9 +1,16 @@
 name: Release
 
 on:
+  workflow_run:
+    workflows: ["Security Checks"]
+    types:
+      - completed
+    branches:
+      - main
+  # Also trigger on tags for manual releases
   push:
     tags:
-      - 'v*.*.*'  # Triggers on version tags like v1.0.0, v1.2.3, etc.
+      - 'v*.*.*'
 
 env:
   REGISTRY: ghcr.io
@@ -14,10 +21,61 @@ permissions:
   packages: write
 
 jobs:
-  # Since we already tested in PR and main, we can skip heavy testing here
-  # Just a quick smoke test to ensure the tagged version builds
-  build-and-release:
+  # Check if we should proceed with release
+  check-trigger:
     runs-on: ubuntu-24.04
+    outputs:
+      should-release: ${{ steps.check.outputs.should-release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Check release conditions
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Direct tag push
+            echo "should-release=true" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            # Security workflow completed
+            if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+              # Check if this was triggered by a tag
+              if [[ "${{ github.event.workflow_run.head_branch }}" == refs/tags/v* ]]; then
+                echo "should-release=true" >> $GITHUB_OUTPUT
+                echo "version=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
+              else
+                echo "should-release=false" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "Security checks failed, aborting release"
+              echo "should-release=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "should-release=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Build binaries for multiple platforms
+  build-binaries:
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should-release == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64.exe
     steps:
       - uses: actions/checkout@v4
 
@@ -27,21 +85,31 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: "./go.mod"
 
-      - name: Extract version from tag
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-
-      - name: Setup Taskfile
-        uses: Illbjorn/setup-task@0.1.0
-
-      # Quick smoke test - if it builds, it's probably fine
-      - name: Build application
-        run: task build
+      - name: Build binary
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p bin
+          go build -v \
+            -ldflags "-w -s -X=github.com/Searge/k8s-controller/cmd.Version=${{ needs.check-trigger.outputs.version }}" \
+            -o bin/kc-${{ matrix.suffix }} \
+            main.go
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kc-${{ matrix.suffix }}
+          path: bin/kc-${{ matrix.suffix }}
+
+  # Build and push Docker images
+  build-docker:
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should-release == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -73,28 +141,37 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.version.outputs.version }}
+            VERSION=${{ needs.check-trigger.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+  # Create GitHub Release with all artifacts
+  create-release:
+    runs-on: ubuntu-24.04
+    needs: [check-trigger, build-binaries, build-docker]
+    if: needs.check-trigger.outputs.should-release == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download all binary artifacts
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          path: ./artifacts
 
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
+      # Prepare release files
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          find ./artifacts -name "kc-*" -type f -exec cp {} release-files/ \;
+          ls -la release-files/
 
-      # Extract changelog that was already generated locally
+      # Extract changelog
       - name: Extract changelog for this version
         id: changelog
         run: |
-          VERSION_NUMBER=${GITHUB_REF#refs/tags/v}
+          VERSION_NUMBER=$(echo "${{ needs.check-trigger.outputs.version }}" | sed 's/^v//')
           if [ -f "CHANGELOG.md" ]; then
-            # Extract changelog section for current version
             awk '/^## \['"$VERSION_NUMBER"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > current_changelog.md
             if [ -s current_changelog.md ]; then
               echo "changelog<<EOF" >> $GITHUB_OUTPUT
@@ -107,15 +184,30 @@ jobs:
             echo "changelog=No CHANGELOG.md file found" >> $GITHUB_OUTPUT
           fi
 
-      # Create GitHub Release with the locally generated changelog
+      # Create GitHub Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
-          body: ${{ steps.changelog.outputs.changelog }}
+          tag_name: ${{ needs.check-trigger.outputs.version }}
+          name: Release ${{ needs.check-trigger.outputs.version }}
+          body: |
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## 📦 Downloads
+
+            **Docker Image:**
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ needs.check-trigger.outputs.version }}
+            ```
+
+            **Binaries:**
+            - Linux (amd64): `kc-linux-amd64`
+            - Linux (arm64): `kc-linux-arm64`
+            - macOS (Intel): `kc-darwin-amd64`
+            - macOS (Apple Silicon): `kc-darwin-arm64`
+            - Windows (amd64): `kc-windows-amd64.exe`
           draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          prerelease: ${{ contains(needs.check-trigger.outputs.version, '-') }}
           files: |
-            bin/${{ github.event.repository.name }}
+            release-files/*
           generate_release_notes: true
