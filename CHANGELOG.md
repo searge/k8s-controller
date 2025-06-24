@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.3] - 2025-06-24
+
+### 🐛 Bug/Lint Fixes
+
+- *(ci)* Fix Docker tag generation in workflow_run context
+
 ## [0.4.2] - 2025-06-24
 
 ### 🐛 Bug/Lint Fixes
