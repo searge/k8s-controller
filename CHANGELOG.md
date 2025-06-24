@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2025-06-24
+
+### 🚀 Features
+
+- *(ci)* Add pre-release security scanning with Trivy
+- *(ci)* Add security gate and matrix builds to release workflow
+
 ## [0.3.0] - 2025-06-24
 
 ### 🚀 Features
