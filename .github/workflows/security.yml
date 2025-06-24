@@ -1,0 +1,89 @@
+name: "Security Checks"
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: write
+  packages: write
+  security-events: write
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: "./go.mod"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Setup Taskfile
+        uses: Illbjorn/setup-task@0.1.0
+
+      # Quick smoke test - if it builds, it's probably fine
+      - name: Build application
+        run: task build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build image locally first for security scanning
+      - name: Build Docker image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64  # Single platform for scanning
+          push: false
+          tags: ${{ env.IMAGE_NAME }}:scan
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          outputs: type=docker,dest=/tmp/image.tar
+
+      - name: Load image for scanning
+        run: docker load -i /tmp/image.tar
+
+      # Security scan BEFORE pushing to registry
+      - name: Run Trivy vulnerability scanner (Critical/High only)
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'  # Fail the build if critical/high vulnerabilities found
+
+      # Generate readable summary for GitHub Actions
+      - name: Run Trivy for GitHub Summary
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: 'table'
+          output: 'trivy-summary.txt'
+
+      - name: Add Trivy scan results to summary
+        run: |
+          echo "## 🛡️ Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Image: \`${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat trivy-summary.txt >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
