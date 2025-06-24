@@ -117,16 +117,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
+      - name: Generate Docker tags
         id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+        run: |
+          VERSION="${{ needs.check-security.outputs.version }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+
+          # Generate tags manually
+          TAGS="${IMAGE}:${VERSION}"
+          TAGS="${TAGS},${IMAGE}:latest"
+
+          # Extract semver parts if it's a proper version
+          if [[ "$VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            TAGS="${TAGS},${IMAGE}:${MAJOR}.${MINOR}.${PATCH}"
+            TAGS="${TAGS},${IMAGE}:${MAJOR}.${MINOR}"
+            TAGS="${TAGS},${IMAGE}:${MAJOR}"
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "Generated tags: ${TAGS}"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
