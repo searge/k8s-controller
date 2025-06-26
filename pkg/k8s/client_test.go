@@ -261,8 +261,8 @@ func ExampleCreateClient() {
 	logger.Info().Msg("Successfully connected to Kubernetes")
 }
 
-// Example_testConnection demonstrates how to test a Kubernetes connection.
-func Example_testConnection() {
+// ExampleClient_TestConnection demonstrates how to test a Kubernetes connection.
+func ExampleClient_TestConnection() {
 	logger := zerolog.New(os.Stderr)
 
 	// Assuming you have a client already created
