@@ -1,5 +1,5 @@
 // Package cmd contains the CLI commands for the k8s-controller application.
-// This file implements the 'test-connection' command which verifies Kubernetes API connectivity.
+// This file implements the 'connection' command which verifies Kubernetes API connectivity.
 package cmd
 
 import (
