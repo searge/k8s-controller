@@ -14,6 +14,9 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// A constant for fake server URL
+const fakeServerURL string = "https://fake-server"
+
 // TestGetDefaultKubeconfigPath tests the default kubeconfig path resolution.
 func TestGetDefaultKubeconfigPath(t *testing.T) {
 	// Save original environment
@@ -121,7 +124,7 @@ func TestClientWithFakeClientset(t *testing.T) {
 
 	client := &Client{
 		clientset: fakeClientset,
-		config:    &rest.Config{Host: "https://fake-server"},
+		config:    &rest.Config{Host: fakeServerURL},
 		logger:    logger,
 	}
 
@@ -131,7 +134,7 @@ func TestClientWithFakeClientset(t *testing.T) {
 	}
 
 	// Test GetConfig
-	if client.GetConfig().Host != "https://fake-server" {
+	if client.GetConfig().Host != fakeServerURL {
 		t.Error("GetConfig() should return the config with fake server")
 	}
 
@@ -150,7 +153,7 @@ func TestTestConnectionWithFakeClient(t *testing.T) {
 
 	client := &Client{
 		clientset: fakeClientset,
-		config:    &rest.Config{Host: "https://fake-server"},
+		config:    &rest.Config{Host: fakeServerURL},
 		logger:    logger,
 	}
 
@@ -173,7 +176,7 @@ func TestTestConnectionWithCancelledContext(t *testing.T) {
 
 	client := &Client{
 		clientset: fakeClientset,
-		config:    &rest.Config{Host: "https://fake-server"},
+		config:    &rest.Config{Host: fakeServerURL},
 		logger:    logger,
 	}
 
