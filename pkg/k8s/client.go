@@ -123,9 +123,13 @@ func CreateClient(config ClientConfig, logger zerolog.Logger) (*Client, error) {
 func (c *Client) TestConnection(ctx context.Context) error {
 	c.logger.Debug().Msg("Testing Kubernetes API connection")
 
-	// Create a context with timeout for the connection test
-	testCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	// Use the provided context directly, or add a reasonable timeout if none exists
+	testCtx := ctx
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 10*time.Second {
+		var cancel context.CancelFunc
+		testCtx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
 
 	// Try to list namespaces as a connection test
 	namespaces, err := c.clientset.CoreV1().Namespaces().List(testCtx, metav1.ListOptions{
@@ -136,10 +140,19 @@ func (c *Client) TestConnection(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to Kubernetes API: %w", err)
 	}
 
-	c.logger.Info().
-		Int("namespace_count", len(namespaces.Items)).
-		Str("server_version", c.config.Host).
-		Msg("Successfully connected to Kubernetes API")
+	// Get server version (optional, may add latency)
+	if serverVersion, err := c.clientset.Discovery().ServerVersion(); err == nil {
+		c.logger.Info().
+			Int("namespace_count", len(namespaces.Items)).
+			Str("server_version", serverVersion.String()).
+			Str("server_host", c.config.Host).
+			Msg("Successfully connected to Kubernetes API")
+	} else {
+		c.logger.Info().
+			Int("namespace_count", len(namespaces.Items)).
+			Str("server_host", c.config.Host).
+			Msg("Successfully connected to Kubernetes API")
+	}
 
 	return nil
 }
