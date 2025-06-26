@@ -74,6 +74,14 @@ func TestListDeploymentsCommandDefined(t *testing.T) {
 // TestListDeploymentsFlagParsing verifies that the list deployments command
 // correctly parses flag values.
 func TestListDeploymentsFlagParsing(t *testing.T) {
+	// Define test constants to avoid duplication
+	const (
+		defaultNS    string = "default"
+		kubeSystemNS string = "kube-system"
+		tableFormat  string = "table"
+		jsonFormat   string = "json"
+	)
+
 	tests := []struct {
 		name              string
 		args              []string
@@ -85,71 +93,78 @@ func TestListDeploymentsFlagParsing(t *testing.T) {
 			name:              "default values",
 			args:              []string{},
 			expectedNamespace: "",
-			expectedOutput:    "table",
+			expectedOutput:    tableFormat,
 			shouldErr:         false,
 		},
 		{
 			name:              "namespace flag",
-			args:              []string{"--namespace=default"},
-			expectedNamespace: "default",
-			expectedOutput:    "table",
+			args:              []string{"--namespace=" + defaultNS},
+			expectedNamespace: defaultNS,
+			expectedOutput:    tableFormat,
 			shouldErr:         false,
 		},
 		{
 			name:              "namespace short flag",
-			args:              []string{"-n", "kube-system"},
-			expectedNamespace: "kube-system",
-			expectedOutput:    "table",
+			args:              []string{"-n", kubeSystemNS},
+			expectedNamespace: kubeSystemNS,
+			expectedOutput:    tableFormat,
 			shouldErr:         false,
 		},
 		{
 			name:              "output flag",
-			args:              []string{"--output=json"},
+			args:              []string{"--output=" + jsonFormat},
 			expectedNamespace: "",
-			expectedOutput:    "json",
+			expectedOutput:    jsonFormat,
 			shouldErr:         false,
 		},
 		{
 			name:              "output short flag",
-			args:              []string{"-o", "json"},
+			args:              []string{"-o", jsonFormat},
 			expectedNamespace: "",
-			expectedOutput:    "json",
+			expectedOutput:    jsonFormat,
 			shouldErr:         false,
 		},
 		{
 			name:              "both flags",
-			args:              []string{"-n", "default", "-o", "json"},
-			expectedNamespace: "default",
-			expectedOutput:    "json",
+			args:              []string{"-n", defaultNS, "-o", jsonFormat},
+			expectedNamespace: defaultNS,
+			expectedOutput:    jsonFormat,
 			shouldErr:         false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset variables
-			namespace = ""
-			outputFormat = "table"
-
-			// Parse flags
-			err := listDeploymentsCmd.ParseFlags(tt.args)
-			if tt.shouldErr && err == nil {
-				t.Error("expected error but got none")
-			}
-			if !tt.shouldErr && err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-
-			// Check values if no error expected
-			if !tt.shouldErr {
-				if namespace != tt.expectedNamespace {
-					t.Errorf("expected namespace %s, got %s", tt.expectedNamespace, namespace)
-				}
-				if outputFormat != tt.expectedOutput {
-					t.Errorf("expected output %s, got %s", tt.expectedOutput, outputFormat)
-				}
-			}
+			runFlagParsingTest(t, tt.args, tt.expectedNamespace, tt.expectedOutput, tt.shouldErr)
 		})
+	}
+}
+
+// runFlagParsingTest is a helper function to reduce cognitive complexity.
+func runFlagParsingTest(t *testing.T, args []string, expectedNamespace, expectedOutput string, shouldErr bool) {
+	t.Helper()
+
+	// Reset variables
+	namespace = ""
+	outputFormat = "table"
+
+	// Parse flags
+	err := listDeploymentsCmd.ParseFlags(args)
+	if shouldErr && err == nil {
+		t.Error("expected error but got none")
+	}
+	if !shouldErr && err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Check values if no error expected
+	if !shouldErr {
+		if namespace != expectedNamespace {
+			t.Errorf("expected namespace %s, got %s", expectedNamespace, namespace)
+		}
+		if outputFormat != expectedOutput {
+			t.Errorf("expected output %s, got %s", expectedOutput, outputFormat)
+		}
 	}
 }
 
@@ -184,6 +199,8 @@ func TestValidateOutputFormat(t *testing.T) {
 
 // TestValidateNamespace tests the namespace validation function.
 func TestValidateNamespace(t *testing.T) {
+	const kubeSystemNS string = "kube-system" // Define constant to avoid duplication
+
 	tests := []struct {
 		name      string
 		namespace string
@@ -191,7 +208,7 @@ func TestValidateNamespace(t *testing.T) {
 	}{
 		{"empty namespace", "", false}, // Empty means all namespaces
 		{"valid namespace", "default", false},
-		{"valid namespace with hyphen", "kube-system", false},
+		{"valid namespace with hyphen", kubeSystemNS, false},
 		{"valid namespace with numbers", "test123", false},
 		{
 			"too long namespace",
