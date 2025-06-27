@@ -13,7 +13,6 @@
       "installZsh": true,
       "configureZshAsDefaultShell": true
     },
-    "ghcr.io/devcontainers-contrib/features/task:1": {},
     "ghcr.io/devcontainers-contrib/features/ansible:2": {},
     "ghcr.io/devcontainers-contrib/features/wget:1": {},
 		"ghcr.io/guiyomh/features/vim:0": {},
@@ -31,7 +30,7 @@
 
   "forwardPorts": [8080],
 
-  "postCreateCommand": "bash scripts/init.sh",
+  "postCreateCommand": "curl -s https://taskfile.dev/install.sh | sh && bash scripts/init.sh",
 
   "customizations": {
     "vscode": {
