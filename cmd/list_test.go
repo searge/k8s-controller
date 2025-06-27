@@ -74,15 +74,32 @@ func TestListDeploymentsCommandDefined(t *testing.T) {
 // TestListDeploymentsFlagParsing verifies that the list deployments command
 // correctly parses flag values.
 func TestListDeploymentsFlagParsing(t *testing.T) {
+	tests := createFlagParsingTestCases()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runFlagParsingTest(t, tt.args, tt.expectedNamespace, tt.expectedOutput, tt.shouldErr)
+		})
+	}
+}
+
+// createFlagParsingTestCases creates test cases for flag parsing to reduce function length.
+func createFlagParsingTestCases() []struct {
+	name              string
+	args              []string
+	expectedNamespace string
+	expectedOutput    string
+	shouldErr         bool
+} {
 	// Define test constants to avoid duplication
 	const (
-		defaultNS    string = "default"
-		kubeSystemNS string = "kube-system"
-		tableFormat  string = "table"
-		jsonFormat   string = "json"
+		defaultNS    = "default"
+		kubeSystemNS = "kube-system"
+		tableFormat  = "table"
+		jsonFormat   = "json"
 	)
 
-	tests := []struct {
+	return []struct {
 		name              string
 		args              []string
 		expectedNamespace string
@@ -131,12 +148,6 @@ func TestListDeploymentsFlagParsing(t *testing.T) {
 			expectedOutput:    jsonFormat,
 			shouldErr:         false,
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			runFlagParsingTest(t, tt.args, tt.expectedNamespace, tt.expectedOutput, tt.shouldErr)
-		})
 	}
 }
 
@@ -199,7 +210,7 @@ func TestValidateOutputFormat(t *testing.T) {
 
 // TestValidateNamespace tests the namespace validation function.
 func TestValidateNamespace(t *testing.T) {
-	const kubeSystemNS string = "kube-system" // Define constant to avoid duplication
+	const kubeSystemNS = "kube-system" // Define constant to avoid duplication
 
 	tests := []struct {
 		name      string
