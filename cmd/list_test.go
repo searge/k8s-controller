@@ -221,11 +221,19 @@ func TestValidateNamespace(t *testing.T) {
 		{"valid namespace", "default", false},
 		{"valid namespace with hyphen", kubeSystemNS, false},
 		{"valid namespace with numbers", "test123", false},
+		{"valid namespace with mixed", "app-v2", false},
 		{
 			"too long namespace",
 			"this-is-a-very-long-namespace-name-that-exceeds-the-maximum-length-allowed-by-kubernetes",
 			true,
 		},
+		{"uppercase characters", "MyNamespace", true},
+		{"contains underscore", "my_namespace", true},
+		{"contains dot", "my.namespace", true},
+		{"starts with hyphen", "-myns", true},
+		{"ends with hyphen", "myns-", true},
+		{"contains space", "my namespace", true},
+		{"special characters", "my@namespace", true},
 	}
 
 	for _, tt := range tests {

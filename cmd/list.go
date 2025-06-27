@@ -121,8 +121,16 @@ func validateNamespace(ns string) error {
 		return fmt.Errorf("namespace name too long (max 63 characters)")
 	}
 
-	// More detailed validation could be added here if needed
-	// For now, we trust that invalid names will be caught by the K8s API
+	// Basic DNS label validation
+	for i, r := range ns {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return fmt.Errorf("namespace name contains invalid character '%c' "+
+				"(must be lowercase alphanumeric with hyphens)", r)
+		}
+		if (i == 0 || i == len(ns)-1) && r == '-' {
+			return fmt.Errorf("namespace name cannot start or end with hyphen")
+		}
+	}
 
 	return nil
 }
