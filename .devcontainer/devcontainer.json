@@ -18,7 +18,7 @@
     "ghcr.io/devcontainers-contrib/features/wget:1": {},
 		"ghcr.io/guiyomh/features/vim:0": {},
     "ghcr.io/devcontainers-contrib/features/starship:1": {},
-		"ghcr.io/devcontainers-contrib/features/zsh-plugins:0": {},
+		"ghcr.io/devcontainers-contrib/features/zsh-plugins:0": {}
   },
 
   "containerEnv": {
