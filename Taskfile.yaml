@@ -198,19 +198,19 @@ tasks:
   # DEVELOPMENT WORKFLOW
   ######################################################################
   dev:
-    desc: "Run development workflow (format, lint, test, build)"
+    desc: "Run development workflow (fmt, lint, test, build)"
     cmds:
-      - task: format
+      - task: fmt
       - task: lint
       - task: test
       - task: build
 
   ci:
-    desc: "Run CI workflow (format check, lint, test with coverage)"
+    desc: "Run CI workflow (fmt check, lint, test with coverage)"
     cmds:
-      - task: format
+      - task: fmt
       - task: lint
-      - task: test-coverage
+      - task: coverage
 
   ######################################################################
   # PODMAN COMMANDS
