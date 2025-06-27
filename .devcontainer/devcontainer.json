@@ -11,12 +11,14 @@
     },
     "ghcr.io/devcontainers/features/common-utils:2": {
       "installZsh": true,
-      "configureZshAsDefaultShell": true
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true
     },
-    "ghcr.io/devcontainers-contrib/features/ansible:2": {},
-    "ghcr.io/devcontainers-contrib/features/wget:1": {},
-		"ghcr.io/guiyomh/features/vim:0": {},
-    "ghcr.io/devcontainers-contrib/features/starship:1": {},
+    "ghcr.io/devcontainers-extra/features/go-task:1": {},
+    "ghcr.io/devcontainers-extra/features/ansible:2": {},
+    "ghcr.io/devcontainers-extra/features/wget-apt-get:1": {},
+		"ghcr.io/jungaretti/features/vim:1": {},
+    "ghcr.io/devcontainers-extra/features/starship:1": {},
 		"ghcr.io/devcontainers-contrib/features/zsh-plugins:0": {}
   },
 
@@ -30,7 +32,7 @@
 
   "forwardPorts": [8080],
 
-  "postCreateCommand": "curl -s https://taskfile.dev/install.sh | sh && bash scripts/init.sh",
+  "postCreateCommand": "bash scripts/init.sh",
 
   "customizations": {
     "vscode": {
