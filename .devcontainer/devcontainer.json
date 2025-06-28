@@ -32,7 +32,7 @@
 
   "forwardPorts": [8080],
 
-  "postCreateCommand": "bash scripts/init.sh",
+  "postCreateCommand": "task collections && task setup",
 
   "customizations": {
     "vscode": {
