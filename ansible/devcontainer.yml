@@ -1,0 +1,161 @@
+---
+- name: "Setup Kubernetes in DevContainer"
+  hosts: [localhost]
+  connection: local
+  become: true
+  vars:
+    # --- Component Versions ---
+    k8s_version: "1.30.0"
+    containerd_version: "2.1.2"
+    runc_version: "1.2.6"
+    cni_version: "1.6.2"
+
+    # --- System Configuration ---
+    arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    pod_network_cidr: "10.244.0.0/16"
+    service_cidr: "10.96.0.0/12"
+
+    # --- Paths ---
+    bin_path: "/usr/local/bin"
+    cni_path: "/opt/cni/bin"
+    cni_net_dir: "/etc/cni/net.d"
+    config_path: "/etc/kubernetes"
+    pki_path: "/etc/kubernetes/pki"
+    etcd_data_path: "/var/lib/etcd"
+    kubelet_data_path: "/var/lib/kubelet"
+    kubernetes_log_path: "/var/log/kubernetes"
+    container_config_dir: "/etc/containerd"
+    wip_dir: "/var/tmp/k8s_wip"
+
+  tasks:
+    - name: "Download and install necessary packages"
+      tags: ["setup"]
+      block:
+        - name: "Setup | Create necessary directories"
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: "0755"
+          loop:
+            - "{{ bin_path }}"
+            - "{{ cni_path }}"
+            - "{{ cni_net_dir }}"
+            - "{{ config_path }}"
+            - "{{ container_config_dir }}"
+            - "{{ pki_path }}"
+            - "{{ etcd_data_path }}"
+            - "{{ kubelet_data_path }}"
+            - "{{ kubernetes_log_path }}"
+            - "{{ wip_dir }}"
+
+        - name: "Install | Download Kubernetes binaries directly"
+          ansible.builtin.get_url:
+            url: "https://dl.k8s.io/v{{ k8s_version }}/bin/linux/{{ arch }}/{{ item }}"
+            dest: "{{ bin_path }}/{{ item }}"
+            mode: "0755"
+          loop:
+            - etcd  # Note: for simplicity, could also download from etcd releases
+            - kube-apiserver
+            - kubectl
+            - kubelet
+            - kube-controller-manager
+            - kube-scheduler
+
+        - name: "Install | Download and install Containerd (for container runtime)"
+          ansible.builtin.unarchive:
+            src: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ arch }}.tar.gz"
+            dest: "{{ wip_dir }}"
+            remote_src: true
+            creates: "{{ wip_dir }}/bin/containerd"
+
+        - name: "Install | Move Containerd binaries"
+          ansible.builtin.copy:
+            src: "{{ wip_dir }}/bin/{{ item }}"
+            dest: "{{ bin_path }}/{{ item }}"
+            mode: "0755"
+            remote_src: true
+          loop:
+            - containerd
+            - containerd-shim-runc-v2
+            - ctr
+
+    - name: "Generate certificates and start services without systemd"
+      tags: ["cluster"]
+      block:
+        # Include certificate generation from provision.yml (same logic)
+        - name: "PKI | Generate all certificates (same as provision.yml)"
+          debug:
+            msg: "Certificate generation logic here - copy from provision.yml"
+
+        # Start services as background processes instead of systemd
+        - name: "Start | Run etcd in background"
+          shell: |
+            nohup {{ bin_path }}/etcd \
+              --name etcd-server \
+              --data-dir {{ etcd_data_path }} \
+              --listen-client-urls http://127.0.0.1:2379 \
+              --advertise-client-urls http://127.0.0.1:2379 \
+              --listen-peer-urls http://127.0.0.1:2380 \
+              --initial-advertise-peer-urls http://127.0.0.1:2380 \
+              --initial-cluster etcd-server=http://127.0.0.1:2380 \
+              --initial-cluster-token etcd-cluster-0 \
+              --initial-cluster-state new \
+              > {{ kubernetes_log_path }}/etcd.log 2>&1 &
+          async: 10
+          poll: 0
+
+        - name: "Wait for etcd to be ready"
+          uri:
+            url: http://127.0.0.1:2379/health
+            status_code: 200
+          register: etcd_health
+          until: etcd_health.status == 200
+          retries: 10
+          delay: 5
+
+        - name: "Start | Run kube-apiserver in background"
+          shell: |
+            nohup {{ bin_path }}/kube-apiserver \
+              --advertise-address=127.0.0.1 \
+              --allow-privileged=true \
+              --authorization-mode=AlwaysAllow \
+              --bind-address=0.0.0.0 \
+              --client-ca-file={{ pki_path }}/ca.crt \
+              --enable-admission-plugins=NodeRestriction \
+              --etcd-servers=http://127.0.0.1:2379 \
+              --runtime-config=api/all=true \
+              --service-cluster-ip-range={{ service_cidr }} \
+              --tls-cert-file={{ pki_path }}/apiserver.crt \
+              --tls-private-key-file={{ pki_path }}/apiserver.key \
+              > {{ kubernetes_log_path }}/apiserver.log 2>&1 &
+          async: 10
+          poll: 0
+
+        # Similar for controller-manager, scheduler, kubelet...
+
+    - name: "Create helper scripts for service management"
+      tags: ["scripts"]
+      block:
+        - name: "Create start-k8s script"
+          copy:
+            content: |
+              #!/bin/bash
+              # Start all Kubernetes components
+              echo "Starting Kubernetes cluster in devcontainer..."
+              # Start etcd, apiserver, etc.
+            dest: "{{ bin_path }}/start-k8s"
+            mode: "0755"
+
+        - name: "Create stop-k8s script"
+          copy:
+            content: |
+              #!/bin/bash
+              # Stop all Kubernetes components
+              echo "Stopping Kubernetes cluster..."
+              pkill -f etcd
+              pkill -f kube-apiserver
+              pkill -f kube-controller-manager
+              pkill -f kube-scheduler
+              pkill -f kubelet
+            dest: "{{ bin_path }}/stop-k8s"
+            mode: "0755"

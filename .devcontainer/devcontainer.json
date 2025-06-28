@@ -9,6 +9,7 @@
       "helm": "latest",
       "minikube": "none"
     },
+    "ghcr.io/devcontainers-extra/features/kind:1": {},
     "ghcr.io/devcontainers/features/common-utils:2": {
       "installZsh": true,
       "configureZshAsDefaultShell": true,
