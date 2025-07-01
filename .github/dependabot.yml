@@ -20,3 +20,8 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+    groups:
+      updates:
+        applies-to: "version-updates"
+        update-types:
+          - "minor"
