@@ -6,7 +6,6 @@
     "ghcr.io/devcontainers/features/go:1": {
       "version": "1.24"
     },
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
     "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
       "version": "1.30.0",
       "helm": "latest",
@@ -48,5 +47,12 @@
     }
   },
 
-  "remoteUser": "vscode"
+  "remoteUser": "vscode",
+  // Enable privileged mode for Kubernetes components
+  "runArgs": [
+    "--privileged",
+    "--security-opt", "seccomp=unconfined",
+    "--cap-add=SYS_ADMIN",
+    "--cap-add=NET_ADMIN"
+  ]
 }
