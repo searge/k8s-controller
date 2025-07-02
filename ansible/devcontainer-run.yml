@@ -4,18 +4,6 @@
   connection: local
   become: true
   vars:
-    # --- Paths ---
-    bin_path: "/usr/local/bin"
-    config_path: "/etc/kubernetes"
-    pki_path: "/etc/kubernetes/pki"
-    etcd_data_path: "/var/lib/etcd"
-    kubelet_data_path: "/var/lib/kubelet"
-    kubernetes_log_path: "/var/log/kubernetes"
-
-    # --- Network Configuration ---
-    pod_network_cidr: "10.244.0.0/16"
-    service_cidr: "10.96.0.0/12"
-
     # --- User Configuration ---
     devcontainer_user: "{{ ansible_env.SUDO_USER | default(ansible_env.USER) | default('vscode') }}"
 
