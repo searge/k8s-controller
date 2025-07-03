@@ -17,6 +17,7 @@
       "configureZshAsDefaultShell": true,
       "installOhMyZsh": true
     },
+    "ghcr.io/rio/features/k9s:1": {},
     "ghcr.io/devcontainers-extra/features/go-task:1": {},
     "ghcr.io/devcontainers-extra/features/ansible:2": {},
     "ghcr.io/devcontainers-extra/features/wget-apt-get:1": {},
