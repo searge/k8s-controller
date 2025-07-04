@@ -96,13 +96,12 @@
         - name: "Start | Start etcd"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/etcd \
-              --name etcd-server \
               --data-dir {{ etcd_data_path }} \
-              --listen-client-urls http://0.0.0.0:2379 \
               --advertise-client-urls http://{{ node_ip }}:2379 \
-              --listen-peer-urls http://0.0.0.0:2379 \
+              --listen-client-urls http://0.0.0.0:2379 \
+              --listen-peer-urls http://0.0.0.0:2380 \
+              --initial-cluster default=http://{{ node_ip }}:2380 \
               --initial-advertise-peer-urls http://{{ node_ip }}:2380 \
-              --initial-cluster etcd-server=http://{{ node_ip }}:2380 \
               --initial-cluster-token etcd-cluster-0 \
               --initial-cluster-state new \
               --log-level info \
@@ -205,15 +204,25 @@
             group: "{{ devcontainer_user }}"
 
         - name: "Start | Start kubelet"
+          environment:
+            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/kubelet \
-              --config={{ kubelet_data_path }}/config.yaml \
               --kubeconfig={{ kubelet_data_path }}/kubeconfig \
-              --node-ip={{ node_ip }} \
+              --config={{ kubelet_data_path }}/config.yaml \
+              --root-dir={{ kubelet_data_path }} \
+              --cert-dir={{ kubelet_data_path }}/pki \
+              --tls-cert-file={{ kubelet_data_path }}/pki/kubelet.crt \
+              --tls-private-key-file={{ kubelet_data_path }}/pki/kubelet.key \
               --hostname-override={{ ansible_hostname }} \
-              --pod-infra-container-image=registry.k8s.io/pause:3.9 \
-              --v=2 \
-              > {{ kubernetes_log_path }}/kubelet.log 2>&1 &
+              --node-ip={{ node_ip }} \
+              --pod-infra-container-image=registry.k8s.io/pause:3.10 \
+              --cloud-provider=external \
+              --cgroup-driver=cgroupfs \
+              --enforce-node-allocatable="" \
+              --max-pods=4  \
+              --v=1 \
+                > {{ kubernetes_log_path }}/kubelet.log 2>&1 &
             echo $! > /tmp/kubelet.pid
             sleep 5
           register: kubelet_start

@@ -25,6 +25,7 @@
             - "{{ cni_path }}"
             - "{{ cni_net_dir }}"
             - "{{ config_path }}"
+            - "{{ config_path }}/manifests"
             - "{{ container_config_dir }}"
             - "{{ pki_path }}"
             - "{{ etcd_data_path }}"
