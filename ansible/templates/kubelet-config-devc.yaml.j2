@@ -1,0 +1,37 @@
+{# /var/lib/kubelet/config.yaml #}
+kind: KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    enabled: true
+  x509:
+    clientCAFile: "{{ pki_path }}/ca.crt"
+authorization:
+  mode: Webhook
+clusterDomain: "cluster.local"
+cgroupDriver: "systemd"
+resolvConf: "/etc/resolv.conf"
+
+kind: KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+authentication:
+  anonymous:
+    enabled: true
+  webhook:
+    enabled: true
+  x509:
+    clientCAFile: "{{ pki_path }}/ca.crt"
+authorization:
+  mode: AlwaysAllow
+clusterDomain: "cluster.local"
+clusterDNS:
+  - "10.0.0.10"
+resolvConf: "/etc/resolv.conf"
+runtimeRequestTimeout: "15m"
+failSwapOn: false
+seccompDefault: true
+serverTLSBootstrap: false
+containerRuntimeEndpoint: "unix:///run/containerd/containerd.sock"
+staticPodPath: "/etc/kubernetes/manifests"

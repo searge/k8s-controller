@@ -245,7 +245,7 @@
 
         - name: "Config | Create kubelet configuration file"
           ansible.builtin.template:
-            src: kubelet-config.yaml.j2
+            src: kubelet-config-devc.yaml.j2
             dest: "{{ kubelet_data_path }}/config.yaml"
 
     - name: "Verify installation"
