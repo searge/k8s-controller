@@ -98,11 +98,11 @@
             nohup {{ bin_path }}/etcd \
               --name etcd-server \
               --data-dir {{ etcd_data_path }} \
-              --listen-client-urls http://127.0.0.1:2379 \
-              --advertise-client-urls http://127.0.0.1:2379 \
-              --listen-peer-urls http://127.0.0.1:2380 \
-              --initial-advertise-peer-urls http://127.0.0.1:2380 \
-              --initial-cluster etcd-server=http://127.0.0.1:2380 \
+              --listen-client-urls http://0.0.0.0:2379 \
+              --advertise-client-urls http://{{ node_ip }}:2379 \
+              --listen-peer-urls http://0.0.0.0:2379 \
+              --initial-advertise-peer-urls http://{{ node_ip }}:2380 \
+              --initial-cluster etcd-server=http://{{ node_ip }}:2380 \
               --initial-cluster-token etcd-cluster-0 \
               --initial-cluster-state new \
               --log-level info \
@@ -130,7 +130,7 @@
               --bind-address=0.0.0.0 \
               --client-ca-file={{ pki_path }}/ca.crt \
               --enable-admission-plugins=NodeRestriction \
-              --etcd-servers=http://127.0.0.1:2379 \
+              --etcd-servers=http://{{ node_ip }}:2379 \
               --kubelet-client-certificate={{ pki_path }}/apiserver.crt \
               --kubelet-client-key={{ pki_path }}/apiserver.key \
               --runtime-config=api/all=true \
@@ -165,14 +165,14 @@
           ansible.builtin.shell: |
             nohup {{ bin_path }}/kube-controller-manager \
               --kubeconfig={{ config_path }}/kube-controller-manager.kubeconfig \
-              --cluster-cidr={{ pod_network_cidr }} \
+              --cluster-cidr={{ cluster_cidr }} \
               --service-cluster-ip-range={{ service_cidr }} \
               --cluster-name=kubernetes \
               --leader-elect=false \
               --root-ca-file={{ pki_path }}/ca.crt \
               --service-account-private-key-file={{ pki_path }}/sa.key \
               --use-service-account-credentials=true \
-              --bind-address=127.0.0.1 \
+              --bind-address={{ node_ip }} \
               --v=2 \
               > {{ kubernetes_log_path }}/kube-controller-manager.log 2>&1 &
             echo $! > /tmp/kube-controller-manager.pid
@@ -185,7 +185,7 @@
             nohup {{ bin_path }}/kube-scheduler \
               --kubeconfig={{ config_path }}/kube-scheduler.kubeconfig \
               --leader-elect=false \
-              --bind-address=127.0.0.1 \
+              --bind-address={{ node_ip }} \
               --v=2 \
               > {{ kubernetes_log_path }}/kube-scheduler.log 2>&1 &
             echo $! > /tmp/kube-scheduler.pid
@@ -197,43 +197,17 @@
       tags: ["worker", "kubelet", "start"]
       block:
         - name: "Start | Prepare kubelet config for devcontainer"
-          ansible.builtin.copy:
-            dest: "{{ kubelet_data_path }}/config-devcontainer.yaml"
+          ansible.builtin.template:
+            src: "kubelet-config-devc.yaml.j2"
+            dest: "{{ kubelet_data_path }}/config.yaml"
             mode: '0644'
-            content: |
-              kind: KubeletConfiguration
-              apiVersion: kubelet.config.k8s.io/v1beta1
-              authentication:
-                anonymous:
-                  enabled: false
-                webhook:
-                  enabled: true
-                x509:
-                  clientCAFile: "{{ pki_path }}/ca.crt"
-              authorization:
-                mode: Webhook
-              clusterDomain: "cluster.local"
-              cgroupDriver: "systemd"
-              resolvConf: "/etc/resolv.conf"
-              containerRuntimeEndpoint: "unix:///var/run/containerd/containerd.sock"
-              # Devcontainer specific settings
-              failSwapOn: false
-              protectKernelDefaults: false
-              makeIPTablesUtilChains: false
-              # Handle devcontainer memory constraints
-              evictionHard:
-                memory.available: "50Mi"
-                nodefs.available: "5%"
-                imagefs.available: "5%"
-              # Logging configuration
-              logging:
-                verbosity: 2
-                format: text
+            owner: "{{ devcontainer_user }}"
+            group: "{{ devcontainer_user }}"
 
         - name: "Start | Start kubelet"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/kubelet \
-              --config={{ kubelet_data_path }}/config-devcontainer.yaml \
+              --config={{ kubelet_data_path }}/config.yaml \
               --kubeconfig={{ kubelet_data_path }}/kubeconfig \
               --node-ip={{ node_ip }} \
               --hostname-override={{ ansible_hostname }} \
