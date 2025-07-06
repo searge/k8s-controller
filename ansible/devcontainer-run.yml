@@ -212,13 +212,7 @@
               --config={{ kubelet_data_path }}/config.yaml \
               --hostname-override={{ ansible_hostname }} \
               --node-ip={{ node_ip }} \
-              --root-dir={{ kubelet_data_path }} \
-              --cert-dir={{ kubelet_data_path }}/pki \
               --pod-infra-container-image=registry.k8s.io/pause:3.10 \
-              --cgroup-driver=cgroupfs \
-              --kubelet-cgroups=/kubelet.slice \
-              --cgroup-root=/ \
-              --fail-swap-on=false \
               --max-pods=4  \
               --v=1 \
                 > {{ kubernetes_log_path }}/kubelet.log 2>&1 &
