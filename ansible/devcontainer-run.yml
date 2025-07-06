@@ -210,16 +210,15 @@
             nohup {{ bin_path }}/kubelet \
               --kubeconfig={{ kubelet_data_path }}/kubeconfig \
               --config={{ kubelet_data_path }}/config.yaml \
-              --root-dir={{ kubelet_data_path }} \
-              --cert-dir={{ kubelet_data_path }}/pki \
-              --tls-cert-file={{ kubelet_data_path }}/pki/kubelet.crt \
-              --tls-private-key-file={{ kubelet_data_path }}/pki/kubelet.key \
               --hostname-override={{ ansible_hostname }} \
               --node-ip={{ node_ip }} \
+              --root-dir={{ kubelet_data_path }} \
+              --cert-dir={{ kubelet_data_path }}/pki \
               --pod-infra-container-image=registry.k8s.io/pause:3.10 \
-              --cloud-provider=external \
               --cgroup-driver=cgroupfs \
-              --enforce-node-allocatable="" \
+              --kubelet-cgroups=/kubelet.slice \
+              --cgroup-root=/ \
+              --fail-swap-on=false \
               --max-pods=4  \
               --v=1 \
                 > {{ kubernetes_log_path }}/kubelet.log 2>&1 &
