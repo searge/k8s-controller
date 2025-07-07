@@ -63,7 +63,18 @@
       "extensions": [
         "golang.go",
         "task.vscode-task",
-        "redhat.ansible"
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml",
+        "samuelcolvin.jinjahtml",
+        "foxundermoon.shell-format",
+        "DavidAnson.vscode-markdownlint",
+        "EditorConfig.EditorConfig",
+        "wayou.vscode-todo-highlight",
+        // Customizations
+        "usernamehw.errorlens",
+        "PKief.material-icon-theme",
+        "arcticicestudio.nord-visual-studio-code",
+        "ms-vscode.sublime-keybindings"
       ]
     }
   }
