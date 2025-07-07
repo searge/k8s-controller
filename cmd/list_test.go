@@ -4,6 +4,9 @@ package cmd
 
 import (
 	"testing"
+	"time"
+
+	"github.com/Searge/k8s-controller/pkg/k8s"
 )
 
 // TestListCommandDefined verifies that the list command is properly defined
@@ -50,6 +53,10 @@ func TestListDeploymentsCommandDefined(t *testing.T) {
 	}{
 		{"namespace", "n", true},
 		{"output", "o", true},
+		{"selector", "l", true},
+		{"kubeconfig", "", true},
+		{"context", "", true},
+		{"timeout", "", true},
 	}
 
 	for _, tt := range tests {
@@ -62,8 +69,8 @@ func TestListDeploymentsCommandDefined(t *testing.T) {
 				t.Errorf("expected '%s' flag not to be defined", tt.flagName)
 			}
 
-			// Check shorthand if flag exists
-			if tt.shouldExist && flag != nil && flag.Shorthand != tt.shorthand {
+			// Check shorthand if flag exists and expected
+			if tt.shouldExist && flag != nil && tt.shorthand != "" && flag.Shorthand != tt.shorthand {
 				t.Errorf("expected '%s' flag shorthand to be '%s', got '%s'",
 					tt.flagName, tt.shorthand, flag.Shorthand)
 			}
@@ -148,6 +155,20 @@ func createFlagParsingTestCases() []struct {
 			expectedOutput:    jsonFormat,
 			shouldErr:         false,
 		},
+		{
+			name:              "label selector flag",
+			args:              []string{"-l", "app=nginx"},
+			expectedNamespace: "",
+			expectedOutput:    tableFormat,
+			shouldErr:         false,
+		},
+		{
+			name:              "timeout flag",
+			args:              []string{"--timeout=60"},
+			expectedNamespace: "",
+			expectedOutput:    tableFormat,
+			shouldErr:         false,
+		},
 	}
 }
 
@@ -158,6 +179,8 @@ func runFlagParsingTest(t *testing.T, args []string, expectedNamespace, expected
 	// Reset variables
 	namespace = ""
 	outputFormat = "table"
+	labelSelector = ""
+	timeoutSeconds = 30
 
 	// Parse flags
 	err := listDeploymentsCmd.ParseFlags(args)
@@ -246,5 +269,319 @@ func TestValidateNamespace(t *testing.T) {
 				t.Errorf("validateNamespace(%s) should not return error, got: %v", tt.namespace, err)
 			}
 		})
+	}
+}
+
+// TestFormatAge tests the age formatting function.
+func TestFormatAge(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		expected string
+	}{
+		{"seconds", 45 * time.Second, "45s"},
+		{"one minute", 1 * time.Minute, "1m"},
+		{"minutes", 30 * time.Minute, "30m"},
+		{"one hour", 1 * time.Hour, "1h"},
+		{"hours", 12 * time.Hour, "12h"},
+		{"one day", 24 * time.Hour, "1d"},
+		{"multiple days", 5 * 24 * time.Hour, "5d"},
+		{"less than minute", 30 * time.Second, "30s"},
+		{"exactly minute", 60 * time.Second, "1m"},
+		{"exactly hour", 60 * time.Minute, "1h"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatAge(tt.duration)
+			if result != tt.expected {
+				t.Errorf("formatAge(%v) = %s, want %s", tt.duration, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFormatImages tests the image formatting function.
+func TestFormatImages(t *testing.T) {
+	tests := []struct {
+		name     string
+		images   []string
+		expected string
+	}{
+		{
+			name:     "no images",
+			images:   []string{},
+			expected: "<none>",
+		},
+		{
+			name:     "single image",
+			images:   []string{"nginx:1.21"},
+			expected: "nginx:1.21",
+		},
+		{
+			name:     "single long image",
+			images:   []string{"registry.example.com/very/long/image/name:v1.2.3-latest"},
+			expected: "registry.example.com/very/long/image/...",
+		},
+		{
+			name:     "two images",
+			images:   []string{"nginx:1.21", "redis:6.2"},
+			expected: "nginx:1.21,redis:6.2",
+		},
+		{
+			name:     "three images",
+			images:   []string{"nginx:1.21", "redis:6.2", "postgres:13"},
+			expected: "nginx:1.21,redis:6.2,postgres:13",
+		},
+		{
+			name:     "many images",
+			images:   []string{"nginx:1.21", "redis:6.2", "postgres:13", "mysql:8.0", "mongodb:4.4"},
+			expected: "nginx:1.21,redis:6.2 +3 more",
+		},
+		{
+			name: "many long images",
+			images: []string{
+				"registry.example.com/very/long/image/name:v1.2.3",
+				"registry.example.com/another/very/long/image:latest",
+				"third:image",
+				"fourth:image",
+			},
+			expected: "registry.example.com/v...,registry.example.com/a... +2 more",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatImages(tt.images)
+			if result != tt.expected {
+				t.Errorf("formatImages(%v) = %s, want %s", tt.images, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestTruncateString tests the string truncation function.
+func TestTruncateString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{
+			name:     "short string",
+			input:    "hello",
+			maxLen:   10,
+			expected: "hello",
+		},
+		{
+			name:     "exact length",
+			input:    "hello",
+			maxLen:   5,
+			expected: "hello",
+		},
+		{
+			name:     "long string",
+			input:    "this-is-a-very-long-string-that-needs-truncating",
+			maxLen:   20,
+			expected: "this-is-a-very-lo...",
+		},
+		{
+			name:     "very short maxLen",
+			input:    "hello",
+			maxLen:   3,
+			expected: "hel",
+		},
+		{
+			name:     "maxLen less than ellipsis",
+			input:    "hello",
+			maxLen:   2,
+			expected: "he",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			maxLen:   10,
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := truncateString(tt.input, tt.maxLen)
+			if result != tt.expected {
+				t.Errorf("truncateString(%s, %d) = %s, want %s", tt.input, tt.maxLen, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFormatDeploymentOutput tests the deployment output formatting.
+func TestFormatDeploymentOutput(t *testing.T) {
+	// Create test deployments
+	testDeployments := []k8s.DeploymentInfo{
+		{
+			Name:      "nginx-deployment",
+			Namespace: "default",
+			Replicas: struct {
+				Desired   int32 `json:"desired"`
+				Available int32 `json:"available"`
+				Ready     int32 `json:"ready"`
+			}{
+				Desired:   3,
+				Available: 3,
+				Ready:     3,
+			},
+			Age:       24 * time.Hour,
+			Images:    []string{"nginx:1.21"},
+			CreatedAt: time.Now().Add(-24 * time.Hour),
+		},
+	}
+
+	tests := []struct {
+		name        string
+		format      string
+		shouldError bool
+	}{
+		{"table format", "table", false},
+		{"json format", "json", false},
+		{"invalid format", "yaml", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := formatDeploymentOutput(testDeployments, tt.format)
+			if tt.shouldError && err == nil {
+				t.Errorf("formatDeploymentOutput() should return error for format %s", tt.format)
+			}
+			if !tt.shouldError && err != nil {
+				t.Errorf("formatDeploymentOutput() should not return error for format %s, got: %v", tt.format, err)
+			}
+		})
+	}
+}
+
+// TestFormatDeploymentJSON tests JSON output formatting.
+func TestFormatDeploymentJSON(t *testing.T) {
+	testDeployments := []k8s.DeploymentInfo{
+		{
+			Name:      "test-deployment",
+			Namespace: "default",
+			CreatedAt: time.Now(),
+		},
+	}
+
+	// This test mainly verifies that the function doesn't panic
+	// and can handle the basic case
+	err := formatDeploymentJSON(testDeployments)
+	if err != nil {
+		t.Errorf("formatDeploymentJSON() should not return error, got: %v", err)
+	}
+}
+
+// TestFormatDeploymentTable tests table output formatting.
+func TestFormatDeploymentTable(t *testing.T) {
+	tests := []struct {
+		name        string
+		deployments []k8s.DeploymentInfo
+		namespace   string
+	}{
+		{
+			name:        "empty deployments",
+			deployments: []k8s.DeploymentInfo{},
+			namespace:   "",
+		},
+		{
+			name: "single deployment all namespaces",
+			deployments: []k8s.DeploymentInfo{
+				{
+					Name:      "test-deployment",
+					Namespace: "default",
+					Replicas: struct {
+						Desired   int32 `json:"desired"`
+						Available int32 `json:"available"`
+						Ready     int32 `json:"ready"`
+					}{
+						Desired:   1,
+						Available: 1,
+						Ready:     1,
+					},
+					Age:    time.Hour,
+					Images: []string{"nginx:latest"},
+				},
+			},
+			namespace: "", // All namespaces
+		},
+		{
+			name: "single deployment specific namespace",
+			deployments: []k8s.DeploymentInfo{
+				{
+					Name:      "test-deployment",
+					Namespace: "default",
+					Replicas: struct {
+						Desired   int32 `json:"desired"`
+						Available int32 `json:"available"`
+						Ready     int32 `json:"ready"`
+					}{
+						Desired:   1,
+						Available: 1,
+						Ready:     1,
+					},
+					Age:    time.Hour,
+					Images: []string{"nginx:latest"},
+				},
+			},
+			namespace: "default", // Specific namespace
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set global namespace variable for the test
+			originalNamespace := namespace
+			namespace = tt.namespace
+			defer func() {
+				namespace = originalNamespace
+			}()
+
+			// This test mainly verifies that the function doesn't panic
+			err := formatDeploymentTable(tt.deployments)
+			if err != nil {
+				t.Errorf("formatDeploymentTable() should not return error, got: %v", err)
+			}
+		})
+	}
+}
+
+// BenchmarkFormatAge benchmarks the age formatting function.
+func BenchmarkFormatAge(b *testing.B) {
+	duration := 25 * time.Hour
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		formatAge(duration)
+	}
+}
+
+// BenchmarkFormatImages benchmarks the image formatting function.
+func BenchmarkFormatImages(b *testing.B) {
+	images := []string{
+		"nginx:1.21",
+		"redis:6.2",
+		"postgres:13",
+		"mysql:8.0",
+		"mongodb:4.4",
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		formatImages(images)
+	}
+}
+
+// BenchmarkTruncateString benchmarks the string truncation function.
+func BenchmarkTruncateString(b *testing.B) {
+	input := "this-is-a-very-long-string-that-needs-truncating-for-display-purposes"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		truncateString(input, 30)
 	}
 }

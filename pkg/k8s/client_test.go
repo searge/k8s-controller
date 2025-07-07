@@ -1,17 +1,23 @@
 // Package k8s contains tests for the Kubernetes client functionality.
-// This file tests kubeconfig loading, client creation, and connection testing.
+// This file tests kubeconfig loading, client creation, connection testing, and deployment operations.
 package k8s
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	ktesting "k8s.io/client-go/testing"
 )
 
 // A constant for fake server URL
@@ -193,6 +199,342 @@ func TestTestConnectionWithCancelledContext(t *testing.T) {
 	}
 }
 
+// createTestDeployment creates a deployment for testing purposes.
+func createTestDeployment(name, namespace string, replicas int32, images []string) *appsv1.Deployment {
+	containers := make([]corev1.Container, len(images))
+	for i, image := range images {
+		containers[i] = corev1.Container{
+			Name:  fmt.Sprintf("container-%d", i),
+			Image: image,
+		}
+	}
+
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			CreationTimestamp: metav1.Time{
+				Time: time.Now().Add(-24 * time.Hour), // Created 24 hours ago
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: containers,
+				},
+			},
+		},
+		Status: appsv1.DeploymentStatus{
+			ReadyReplicas:     replicas,
+			AvailableReplicas: replicas,
+		},
+	}
+}
+
+// TestListDeployments tests the ListDeployments functionality with various scenarios.
+func TestListDeployments(t *testing.T) {
+	logger := zerolog.New(os.Stderr)
+
+	tests := []struct {
+		name          string
+		deployments   []runtime.Object
+		options       ListDeploymentsOptions
+		expectedCount int
+		expectedNames []string
+		expectedError bool
+		errorOnList   bool
+	}{
+		{
+			name: "list deployments from all namespaces",
+			deployments: []runtime.Object{
+				createTestDeployment("app1", "default", 3, []string{"nginx:1.21"}),
+				createTestDeployment("app2", "kube-system", 1, []string{"busybox:latest"}),
+				createTestDeployment("app3", "default", 2, []string{"redis:6.2", "postgres:13"}),
+			},
+			options: ListDeploymentsOptions{
+				Namespace: "", // All namespaces
+			},
+			expectedCount: 3,
+			expectedNames: []string{"app1", "app2", "app3"},
+			expectedError: false,
+		},
+		{
+			name: "list deployments from specific namespace",
+			deployments: []runtime.Object{
+				createTestDeployment("app1", "default", 3, []string{"nginx:1.21"}),
+				createTestDeployment("app2", "kube-system", 1, []string{"busybox:latest"}),
+				createTestDeployment("app3", "default", 2, []string{"redis:6.2"}),
+			},
+			options: ListDeploymentsOptions{
+				Namespace: "default",
+			},
+			expectedCount: 2,
+			expectedNames: []string{"app1", "app3"},
+			expectedError: false,
+		},
+		{
+			name: "list deployments from empty namespace",
+			deployments: []runtime.Object{
+				createTestDeployment("app1", "default", 3, []string{"nginx:1.21"}),
+			},
+			options: ListDeploymentsOptions{
+				Namespace: "empty-namespace",
+			},
+			expectedCount: 0,
+			expectedNames: []string{},
+			expectedError: false,
+		},
+		{
+			name:        "no deployments exist",
+			deployments: []runtime.Object{},
+			options: ListDeploymentsOptions{
+				Namespace: "",
+			},
+			expectedCount: 0,
+			expectedNames: []string{},
+			expectedError: false,
+		},
+		{
+			name: "API error on list",
+			deployments: []runtime.Object{
+				createTestDeployment("app1", "default", 3, []string{"nginx:1.21"}),
+			},
+			options: ListDeploymentsOptions{
+				Namespace: "",
+			},
+			expectedError: true,
+			errorOnList:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fake clientset with test data
+			fakeClientset := fake.NewSimpleClientset(tt.deployments...)
+
+			// Configure error simulation if needed
+			if tt.errorOnList {
+				fakeClientset.PrependReactor("list", "deployments",
+					func(_ ktesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, fmt.Errorf("simulated API error")
+					})
+			}
+
+			client := &Client{
+				clientset: fakeClientset,
+				config:    &rest.Config{Host: fakeServerURL},
+				logger:    logger,
+			}
+
+			ctx := context.Background()
+			deployments, err := client.ListDeployments(ctx, tt.options)
+
+			// Check error expectation
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("ListDeployments() expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("ListDeployments() unexpected error: %v", err)
+				return
+			}
+
+			// Check deployment count
+			if len(deployments) != tt.expectedCount {
+				t.Errorf("ListDeployments() got %d deployments, want %d", len(deployments), tt.expectedCount)
+			}
+
+			// Check deployment names
+			actualNames := make([]string, len(deployments))
+			for i, deployment := range deployments {
+				actualNames[i] = deployment.Name
+			}
+
+			// Sort both slices for comparison (order may vary)
+			if !stringSlicesEqual(actualNames, tt.expectedNames) {
+				t.Errorf("ListDeployments() got names %v, want %v", actualNames, tt.expectedNames)
+			}
+
+			// Verify deployment info structure
+			for _, deployment := range deployments {
+				if deployment.Name == "" {
+					t.Error("Deployment name should not be empty")
+				}
+				if deployment.Namespace == "" {
+					t.Error("Deployment namespace should not be empty")
+				}
+				if deployment.CreatedAt.IsZero() {
+					t.Error("Deployment CreatedAt should not be zero")
+				}
+				if deployment.Age <= 0 {
+					t.Error("Deployment Age should be positive")
+				}
+				if len(deployment.Images) == 0 {
+					t.Error("Deployment should have at least one image")
+				}
+			}
+		})
+	}
+}
+
+// TestExtractImages tests the extractImages function with various container configurations.
+func TestExtractImages(t *testing.T) {
+	tests := []struct {
+		name           string
+		deployment     *appsv1.Deployment
+		expectedImages []string
+	}{
+		{
+			name: "single container with one image",
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "web", Image: "nginx:1.21"},
+							},
+						},
+					},
+				},
+			},
+			expectedImages: []string{"nginx:1.21"},
+		},
+		{
+			name: "multiple containers with different images",
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "web", Image: "nginx:1.21"},
+								{Name: "db", Image: "postgres:13"},
+								{Name: "cache", Image: "redis:6.2"},
+							},
+						},
+					},
+				},
+			},
+			expectedImages: []string{"nginx:1.21", "postgres:13", "redis:6.2"},
+		},
+		{
+			name: "containers with duplicate images",
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "web1", Image: "nginx:1.21"},
+								{Name: "web2", Image: "nginx:1.21"},
+								{Name: "db", Image: "postgres:13"},
+							},
+						},
+					},
+				},
+			},
+			expectedImages: []string{"nginx:1.21", "postgres:13"},
+		},
+		{
+			name: "init containers and regular containers",
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							InitContainers: []corev1.Container{
+								{Name: "init", Image: "busybox:latest"},
+							},
+							Containers: []corev1.Container{
+								{Name: "app", Image: "nginx:1.21"},
+							},
+						},
+					},
+				},
+			},
+			expectedImages: []string{"nginx:1.21", "busybox:latest"},
+		},
+		{
+			name: "empty image names should be ignored",
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "valid", Image: "nginx:1.21"},
+								{Name: "empty", Image: ""},
+							},
+						},
+					},
+				},
+			},
+			expectedImages: []string{"nginx:1.21"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			images := extractImages(tt.deployment)
+
+			if len(images) != len(tt.expectedImages) {
+				t.Errorf("extractImages() got %d images, want %d", len(images), len(tt.expectedImages))
+			}
+
+			// Check that all expected images are present
+			for _, expectedImage := range tt.expectedImages {
+				found := false
+				for _, actualImage := range images {
+					if actualImage == expectedImage {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("extractImages() missing expected image: %s", expectedImage)
+				}
+			}
+
+			// Check for unexpected images
+			for _, actualImage := range images {
+				found := false
+				for _, expectedImage := range tt.expectedImages {
+					if actualImage == expectedImage {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("extractImages() found unexpected image: %s", actualImage)
+				}
+			}
+		})
+	}
+}
+
+// stringSlicesEqual checks if two string slices contain the same elements (order independent).
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	// Create a map to count occurrences in slice a
+	counts := make(map[string]int)
+	for _, s := range a {
+		counts[s]++
+	}
+
+	// Check that slice b has the same elements with same counts
+	for _, s := range b {
+		if counts[s] == 0 {
+			return false
+		}
+		counts[s]--
+	}
+
+	return true
+}
+
 // BenchmarkCreateClient benchmarks the client creation process.
 func BenchmarkCreateClient(b *testing.B) {
 	logger := zerolog.New(os.Stderr)
@@ -230,6 +572,37 @@ users:
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = LoadKubeconfig(config, logger)
+	}
+}
+
+// BenchmarkListDeployments benchmarks the ListDeployments operation.
+func BenchmarkListDeployments(b *testing.B) {
+	logger := zerolog.New(os.Stderr)
+
+	// Create test deployments
+	deployments := make([]runtime.Object, 100)
+	for i := 0; i < 100; i++ {
+		deployments[i] = createTestDeployment(
+			fmt.Sprintf("app-%d", i),
+			"default",
+			3,
+			[]string{fmt.Sprintf("nginx:1.%d", i%10)},
+		)
+	}
+
+	fakeClientset := fake.NewSimpleClientset(deployments...)
+	client := &Client{
+		clientset: fakeClientset,
+		config:    &rest.Config{Host: fakeServerURL},
+		logger:    logger,
+	}
+
+	ctx := context.Background()
+	opts := ListDeploymentsOptions{Namespace: ""}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = client.ListDeployments(ctx, opts)
 	}
 }
 
@@ -288,4 +661,60 @@ func ExampleClient_TestConnection() {
 	}
 
 	logger.Info().Msg("Connection test successful")
+}
+
+// ExampleClient_ListDeployments demonstrates how to list deployments.
+func ExampleClient_ListDeployments() {
+	logger := zerolog.New(os.Stderr)
+
+	// Create client
+	config := ClientConfig{}
+	client, err := CreateClient(config, logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to create client")
+	}
+	defer func() {
+		if err := client.Close(); err != nil {
+			logger.Error().Err(err).Msg("Failed to close client")
+		}
+	}()
+
+	ctx := context.Background()
+
+	// List all deployments
+	allDeployments, err := client.ListDeployments(ctx, ListDeploymentsOptions{})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list all deployments")
+		return
+	}
+
+	logger.Info().Int("count", len(allDeployments)).Msg("Listed all deployments")
+
+	// List deployments from specific namespace
+	nsDeployments, err := client.ListDeployments(ctx, ListDeploymentsOptions{
+		Namespace: "kube-system",
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list namespace deployments")
+		return
+	}
+
+	logger.Info().
+		Int("count", len(nsDeployments)).
+		Str("namespace", "kube-system").
+		Msg("Listed deployments from namespace")
+
+	// List deployments with label selector
+	labeledDeployments, err := client.ListDeployments(ctx, ListDeploymentsOptions{
+		LabelSelector: "app=nginx",
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list labeled deployments")
+		return
+	}
+
+	logger.Info().
+		Int("count", len(labeledDeployments)).
+		Str("selector", "app=nginx").
+		Msg("Listed deployments with label selector")
 }

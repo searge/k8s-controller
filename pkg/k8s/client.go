@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -34,6 +35,36 @@ type ClientConfig struct {
 	// Context specifies which context to use from the kubeconfig.
 	// If empty, the current context will be used.
 	Context string
+}
+
+// DeploymentInfo represents essential information about a Kubernetes deployment.
+// This struct contains only the fields needed for listing operations.
+type DeploymentInfo struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Replicas  struct {
+		Desired   int32 `json:"desired"`
+		Available int32 `json:"available"`
+		Ready     int32 `json:"ready"`
+	} `json:"replicas"`
+	Age       time.Duration `json:"age"`
+	Images    []string      `json:"images"`
+	CreatedAt time.Time     `json:"created_at"`
+}
+
+// ListDeploymentsOptions holds options for listing deployments.
+type ListDeploymentsOptions struct {
+	// Namespace specifies the namespace to list deployments from.
+	// If empty, deployments from all namespaces will be listed.
+	Namespace string
+
+	// LabelSelector allows filtering deployments by labels.
+	// Uses the standard Kubernetes label selector syntax.
+	LabelSelector string
+
+	// FieldSelector allows filtering deployments by fields.
+	// Uses the standard Kubernetes field selector syntax.
+	FieldSelector string
 }
 
 // LoadKubeconfig loads the Kubernetes configuration from various sources.
@@ -155,6 +186,100 @@ func (c *Client) TestConnection(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// ListDeployments retrieves deployments from the Kubernetes cluster based on the provided options.
+// It returns a slice of DeploymentInfo structs containing essential deployment information.
+func (c *Client) ListDeployments(ctx context.Context, opts ListDeploymentsOptions) ([]DeploymentInfo, error) {
+	c.logger.Debug().
+		Str("namespace", opts.Namespace).
+		Str("label_selector", opts.LabelSelector).
+		Msg("Listing deployments")
+
+	// Prepare list options
+	listOpts := metav1.ListOptions{
+		LabelSelector: opts.LabelSelector,
+		FieldSelector: opts.FieldSelector,
+	}
+
+	// Determine which namespace(s) to query
+	var deploymentList *appsv1.DeploymentList
+	var err error
+
+	if opts.Namespace == "" {
+		// List from all namespaces
+		c.logger.Debug().Msg("Listing deployments from all namespaces")
+		deploymentList, err = c.clientset.AppsV1().Deployments("").List(ctx, listOpts)
+	} else {
+		// List from specific namespace
+		c.logger.Debug().Str("namespace", opts.Namespace).Msg("Listing deployments from namespace")
+		deploymentList, err = c.clientset.AppsV1().Deployments(opts.Namespace).List(ctx, listOpts)
+	}
+
+	if err != nil {
+		c.logger.Error().Err(err).Msg("Failed to list deployments")
+		return nil, fmt.Errorf("failed to list deployments: %w", err)
+	}
+
+	// Convert to our DeploymentInfo struct
+	deployments := make([]DeploymentInfo, 0, len(deploymentList.Items))
+	now := time.Now()
+
+	for _, deployment := range deploymentList.Items {
+		info := DeploymentInfo{
+			Name:      deployment.Name,
+			Namespace: deployment.Namespace,
+			CreatedAt: deployment.CreationTimestamp.Time,
+			Age:       now.Sub(deployment.CreationTimestamp.Time),
+		}
+
+		// Extract replica information
+		if deployment.Spec.Replicas != nil {
+			info.Replicas.Desired = *deployment.Spec.Replicas
+		}
+		info.Replicas.Available = deployment.Status.AvailableReplicas
+		info.Replicas.Ready = deployment.Status.ReadyReplicas
+
+		// Extract container images
+		info.Images = extractImages(&deployment)
+
+		deployments = append(deployments, info)
+	}
+
+	c.logger.Info().
+		Int("count", len(deployments)).
+		Str("namespace", opts.Namespace).
+		Msg("Successfully listed deployments")
+
+	return deployments, nil
+}
+
+// extractImages extracts all unique container images from a deployment.
+// It processes both init containers and regular containers.
+func extractImages(deployment *appsv1.Deployment) []string {
+	imageSet := make(map[string]struct{})
+
+	// Process containers
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		if container.Image != "" {
+			imageSet[container.Image] = struct{}{}
+		}
+	}
+
+	// Process init containers
+	for _, container := range deployment.Spec.Template.Spec.InitContainers {
+		if container.Image != "" {
+			imageSet[container.Image] = struct{}{}
+		}
+	}
+
+	// Convert map to slice
+	images := make([]string, 0, len(imageSet))
+	for image := range imageSet {
+		images = append(images, image)
+	}
+
+	return images
 }
 
 // GetClientset returns the underlying Kubernetes clientset.
