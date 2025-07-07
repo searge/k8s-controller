@@ -4,27 +4,7 @@
   connection: local
   become: true
   vars:
-    # --- Component Versions ---
-    k8s_version: "1.30.0"
-    containerd_version: "2.1.2"
-    runc_version: "1.2.6"
-    cni_version: "1.6.2"
-
-    # --- System Configuration ---
-    arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
-    pod_network_cidr: "10.244.0.0/16"
-    service_cidr: "10.96.0.0/12"
-
-    # --- Paths ---
-    bin_path: "/usr/local/bin"
-    cni_path: "/opt/cni/bin"
-    cni_net_dir: "/etc/cni/net.d"
-    config_path: "/etc/kubernetes"
-    pki_path: "/etc/kubernetes/pki"
-    etcd_data_path: "/var/lib/etcd"
-    kubelet_data_path: "/var/lib/kubelet"
-    kubernetes_log_path: "/var/log/kubernetes"
-    container_config_dir: "/etc/containerd"
+    # --- Working Path ---
     wip_dir: "/var/tmp/k8s_wip"
 
   tasks:

@@ -1,0 +1,369 @@
+---
+- name: "Install and configure K8s components in devcontainer"
+  hosts: [localhost]
+  connection: local
+  become: true
+  vars:
+    # --- Working Path ---
+    wip_dir: "/tmp/k8s_wip"
+
+    # --- User Configuration ---
+    devcontainer_user: "{{ ansible_env.SUDO_USER | default(ansible_env.USER) | default('vscode') }}"
+    user_home: "/home/{{ devcontainer_user }}"
+
+  tasks:
+    - name: "Install K8s binaries"
+      tags: ["install"]
+      block:
+        - name: "Install | Create necessary directories"
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: "0755"
+          loop:
+            - "{{ bin_path }}"
+            - "{{ cni_path }}"
+            - "{{ cni_net_dir }}"
+            - "{{ config_path }}"
+            - "{{ config_path }}/manifests"
+            - "{{ container_config_dir }}"
+            - "{{ pki_path }}"
+            - "{{ etcd_data_path }}"
+            - "{{ kubelet_data_path }}"
+            - "{{ kubernetes_log_path }}"
+            - "{{ wip_dir }}"
+
+        - name: "Install | Download and unpack Kubebuilder tools (etcd, kube-apiserver)"
+          ansible.builtin.unarchive:
+            src: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{ k8s_version }}-linux-{{ arch }}.tar.gz"
+            dest: "{{ wip_dir }}"
+            remote_src: true
+            creates: "{{ wip_dir }}/kubebuilder/bin/kube-apiserver"
+
+        - name: "Install | Move Kubebuilder binaries to {{ bin_path }}"
+          ansible.builtin.copy:
+            src: "{{ wip_dir }}/kubebuilder/bin/{{ item }}"
+            dest: "{{ bin_path }}/{{ item }}"
+            mode: "0755"
+            remote_src: true
+          loop:
+            - etcd
+            - kube-apiserver
+            - kubectl
+
+        - name: "Install | Download other Kubernetes components"
+          ansible.builtin.get_url:
+            url: "https://dl.k8s.io/v{{ k8s_version }}/bin/linux/{{ arch }}/{{ item }}"
+            dest: "{{ bin_path }}/{{ item }}"
+            mode: "0755"
+          loop:
+            - kubelet
+            - kube-controller-manager
+            - kube-scheduler
+
+        - name: "Install | Download and unpack Containerd"
+          ansible.builtin.unarchive:
+            src: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ arch }}.tar.gz"
+            dest: "{{ wip_dir }}"
+            remote_src: true
+            creates: "{{ wip_dir }}/bin/containerd"
+
+        - name: "Install | Move Containerd binaries to {{ bin_path }}"
+          ansible.builtin.copy:
+            src: "{{ wip_dir }}/bin/{{ item }}"
+            dest: "{{ bin_path }}/{{ item }}"
+            mode: "0755"
+            remote_src: true
+          loop:
+            - containerd
+            - containerd-shim-runc-v2
+            - ctr
+
+        - name: "Install | Download and install Runc"
+          ansible.builtin.get_url:
+            url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.{{ arch }}"
+            dest: "{{ bin_path }}/runc"
+            mode: "0755"
+
+        - name: "Install | Download and install CNI plugins"
+          ansible.builtin.unarchive:
+            src: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_version }}/cni-plugins-linux-{{ arch }}-v{{ cni_version }}.tgz"
+            dest: "{{ cni_path }}"
+            remote_src: true
+            creates: "{{ cni_path }}/bridge"
+
+    - name: "Generate certificates and tokens"
+      tags: ["certs"]
+      block:
+        - name: "PKI | CA | Create a private key for our new CA"
+          community.crypto.openssl_privatekey:
+            path: "{{ pki_path }}/ca.key"
+
+        - name: "PKI | CA | Create a CSR for our new CA"
+          community.crypto.openssl_csr:
+            path: "{{ pki_path }}/ca.csr"
+            privatekey_path: "{{ pki_path }}/ca.key"
+            common_name: "kubernetes-ca"
+            basic_constraints:
+              - "CA:TRUE"
+            key_usage:
+              - keyCertSign
+
+        - name: "PKI | CA | Create a self-signed CA certificate from the CSR"
+          community.crypto.x509_certificate:
+            path: "{{ pki_path }}/ca.crt"
+            csr_path: "{{ pki_path }}/ca.csr"
+            privatekey_path: "{{ pki_path }}/ca.key"
+            provider: selfsigned
+
+        - name: "PKI | API Server | Create a private key for the API server"
+          community.crypto.openssl_privatekey:
+            path: "{{ pki_path }}/apiserver.key"
+
+        - name: "PKI | API Server | Create a CSR for the API server with SANs"
+          community.crypto.openssl_csr:
+            path: "{{ pki_path }}/apiserver.csr"
+            privatekey_path: "{{ pki_path }}/apiserver.key"
+            common_name: "kube-apiserver"
+            key_usage:
+              - digitalSignature
+              - keyEncipherment
+            extended_key_usage:
+              - serverAuth
+              - clientAuth
+            subject_alt_name:
+              - "IP:127.0.0.1"
+              - "DNS:localhost"
+              - "DNS:kubernetes"
+              - "DNS:kubernetes.default"
+              - "DNS:kubernetes.default.svc"
+              - "DNS:kubernetes.default.svc.cluster.local"
+
+        - name: "PKI | API Server | Create a certificate for the API server signed by our CA"
+          community.crypto.x509_certificate:
+            path: "{{ pki_path }}/apiserver.crt"
+            csr_path: "{{ pki_path }}/apiserver.csr"
+            provider: ownca
+            ownca_path: "{{ pki_path }}/ca.crt"
+            ownca_privatekey_path: "{{ pki_path }}/ca.key"
+
+        - name: "PKI | SA | Create Service Account private key"
+          community.crypto.openssl_privatekey:
+            path: "{{ pki_path }}/sa.key"
+
+        - name: "PKI | SA | Create Service Account public key"
+          community.crypto.openssl_publickey:
+            path: "{{ pki_path }}/sa.pub"
+            privatekey_path: "{{ pki_path }}/sa.key"
+            format: PEM
+
+        - name: "PKI | Kubelet | Create a private key for the kubelet"
+          community.crypto.openssl_privatekey:
+            path: "{{ pki_path }}/kubelet.key"
+
+        - name: "PKI | Kubelet | Create a CSR for the kubelet"
+          community.crypto.openssl_csr:
+            path: "{{ pki_path }}/kubelet.csr"
+            privatekey_path: "{{ pki_path }}/kubelet.key"
+            common_name: "system:node:{{ ansible_hostname }}"
+            organization_name: "system:nodes"
+
+        - name: "PKI | Kubelet | Create a certificate for the kubelet signed by our CA"
+          community.crypto.x509_certificate:
+            path: "{{ pki_path }}/kubelet.crt"
+            csr_path: "{{ pki_path }}/kubelet.csr"
+            provider: ownca
+            ownca_path: "{{ pki_path }}/ca.crt"
+            ownca_privatekey_path: "{{ pki_path }}/ca.key"
+
+        - name: "Auth | Generate a secure random token for the admin user"
+          ansible.builtin.set_fact:
+            api_bearer_token: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+          run_once: true
+
+        - name: "Auth | Create static token file with the generated token"
+          ansible.builtin.copy:
+            dest: "{{ config_path }}/token.csv"
+            content: "{{ api_bearer_token }},admin,admin,system:masters"
+            mode: "0600"
+
+        - name: "Kubeconfigs | Generate kubeconfigs for control plane components"
+          ansible.builtin.template:
+            src: component.kubeconfig.j2
+            dest: "{{ config_path }}/{{ item }}.kubeconfig"
+            mode: "0600"
+          loop:
+            - kube-controller-manager
+            - kube-scheduler
+          vars:
+            component_name: "system:{{ item }}"
+
+    - name: "Create configuration files"
+      tags: ["config"]
+      block:
+        - name: "Config | Create .kube directories"
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner }}"
+            group: "{{ item.group }}"
+            mode: '0700'
+          loop:
+            - { path: "/root/.kube", owner: "root", group: "root" }
+            - { path: "{{ user_home }}/.kube", owner: "{{ devcontainer_user }}", group: "{{ devcontainer_user }}" }
+
+        - name: "Config | Create admin kubeconfig for root user"
+          ansible.builtin.template:
+            src: admin.kubeconfig.j2
+            dest: /root/.kube/config
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: "Config | Create admin kubeconfig for devcontainer user"
+          ansible.builtin.template:
+            src: admin.kubeconfig.j2
+            dest: "{{ user_home }}/.kube/config"
+            owner: "{{ devcontainer_user }}"
+            group: "{{ devcontainer_user }}"
+            mode: '0600'
+
+        - name: "Config | Create containerd configuration"
+          ansible.builtin.template:
+            src: containerd-config.toml.j2
+            dest: /etc/containerd/config.toml
+            mode: '0644'
+
+        - name: "Config | Create CNI network configuration"
+          ansible.builtin.template:
+            src: 10-bridge.conf.j2
+            dest: "{{ cni_net_dir }}/10-bridge.conf"
+
+        - name: "Config | Create kubelet kubeconfig file"
+          ansible.builtin.template:
+            src: kubelet.kubeconfig.j2
+            dest: "{{ kubelet_data_path }}/kubeconfig"
+
+        - name: "Config | Create kubelet configuration file"
+          ansible.builtin.template:
+            src: kubelet-config-devc.yaml.j2
+            dest: "{{ kubelet_data_path }}/config.yaml"
+
+    - name: "Verify installation"
+      tags: ["verify"]
+      block:
+        - name: "Verify | Check binary versions"
+          ansible.builtin.command: "{{ item.cmd }}"
+          register: version_results
+          failed_when: version_results.rc != 0
+          changed_when: false
+          loop:
+            - { name: "kubectl", cmd: "kubectl version --client --output=yaml" }
+            - { name: "kubelet", cmd: "kubelet --version" }
+            - { name: "etcd", cmd: "etcd --version" }
+            - { name: "containerd", cmd: "containerd --version" }
+            - { name: "runc", cmd: "runc --version" }
+
+        - name: "Verify | Check CNI plugins"
+          ansible.builtin.command: "ls -1 {{ cni_path }}"
+          register: cni_plugins
+          changed_when: false
+
+        - name: "Verify | Check certificates"
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          register: cert_files
+          loop:
+            - "{{ pki_path }}/ca.crt"
+            - "{{ pki_path }}/ca.key"
+            - "{{ pki_path }}/apiserver.crt"
+            - "{{ pki_path }}/apiserver.key"
+            - "{{ pki_path }}/sa.key"
+            - "{{ pki_path }}/sa.pub"
+            - "{{ pki_path }}/kubelet.crt"
+            - "{{ pki_path }}/kubelet.key"
+
+        - name: "Verify | Check kubeconfig files"
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          register: kubeconfig_files
+          loop:
+            - "/root/.kube/config"
+            - "{{ user_home }}/.kube/config"
+            - "{{ config_path }}/kube-controller-manager.kubeconfig"
+            - "{{ config_path }}/kube-scheduler.kubeconfig"
+            - "{{ kubelet_data_path }}/kubeconfig"
+
+        - name: "Verify | Check configuration files"
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          register: config_files
+          loop:
+            - "/etc/containerd/config.toml"
+            - "{{ cni_net_dir }}/10-bridge.conf"
+            - "{{ kubelet_data_path }}/config.yaml"
+            - "{{ config_path }}/token.csv"
+
+        - name: "Verify | Test kubectl config"
+          ansible.builtin.command: "kubectl config view --minify"
+          register: kubectl_config_test
+          become_user: "{{ devcontainer_user }}"
+          changed_when: false
+
+    - name: "Installation summary"
+      tags: ["summary"]
+      block:
+        - name: "Summary | Extract version info"
+          ansible.builtin.set_fact:
+            component_versions:
+              kubectl: "{{ (version_results.results[0].stdout | from_yaml).clientVersion.gitVersion }}"
+              kubelet: "{{ version_results.results[1].stdout.split(' ')[1] }}"
+              etcd: "{{ version_results.results[2].stdout.split(' ')[2] }}"
+              containerd: "{{ version_results.results[3].stdout.split(' ')[1] }}"
+              runc: "{{ version_results.results[4].stdout.split(' ')[2] }}"
+
+        - name: "Summary | Count files"
+          ansible.builtin.set_fact:
+            cert_count: "{{ cert_files.results | selectattr('stat.exists') | list | length }}"
+            kubeconfig_count: "{{ kubeconfig_files.results | selectattr('stat.exists') | list | length }}"
+            config_count: "{{ config_files.results | selectattr('stat.exists') | list | length }}"
+            cni_count: "{{ cni_plugins.stdout_lines | length }}"
+
+        - name: "Summary | Display installation status"
+          ansible.builtin.debug:
+            msg:
+              - "================================================================"
+              - "🎉 KUBERNETES DEVCONTAINER INSTALLATION COMPLETE"
+              - "================================================================"
+              - ""
+              - "📦 INSTALLED COMPONENTS:"
+              - "• kubectl:      {{ component_versions.kubectl }}"
+              - "• kubelet:      {{ component_versions.kubelet }}"
+              - "• etcd:         {{ component_versions.etcd }}"
+              - "• containerd:   {{ component_versions.containerd }}"
+              - "• runc:         {{ component_versions.runc }}"
+              - "• CNI plugins:  {{ cni_count }} plugins installed"
+              - ""
+              - "🔐 PKI CERTIFICATES:"
+              - "• Generated:    {{ cert_count }}/8 certificate files"
+              - ""
+              - "📋 CONFIGURATION FILES:"
+              - "• Kubeconfigs:  {{ kubeconfig_count }}/5 files created"
+              - "• Configs:      {{ config_count }}/4 files created"
+              - ""
+              - "📁 LOCATIONS:"
+              - "• Binaries:     {{ bin_path }}/"
+              - "• Certificates: {{ pki_path }}/"
+              - "• Root config:  /root/.kube/config"
+              - "• User config:  {{ user_home }}/.kube/config"
+              - "• CNI configs:  {{ cni_net_dir }}/"
+              - "• Data dirs:    {{ etcd_data_path }}/, {{ kubelet_data_path }}/"
+              - "• Logs:         {{ kubernetes_log_path }}/"
+              - ""
+              - "✅ READY FOR: Control plane startup"
+              - "================================================================"
+
+        - name: "Summary | Cleanup temporary files"
+          ansible.builtin.file:
+            path: "{{ wip_dir }}"
+            state: absent

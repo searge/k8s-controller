@@ -1,0 +1,81 @@
+{
+  "name": "k8s-controller",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.24"
+    },
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "version": "1.30.0",
+      "helm": "latest",
+      "minikube": "none"
+    },
+    "ghcr.io/devcontainers-extra/features/kind:1": {},
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true
+    },
+    "ghcr.io/rio/features/k9s:1": {},
+    "ghcr.io/devcontainers-extra/features/go-task:1": {},
+    "ghcr.io/devcontainers-extra/features/ansible:2": {},
+    "ghcr.io/devcontainers-extra/features/wget-apt-get:1": {},
+    "ghcr.io/jungaretti/features/vim:1": {},
+    "ghcr.io/devcontainers-extra/features/starship:1": {},
+    "ghcr.io/devcontainers-contrib/features/zsh-plugins:0": {}
+  },
+  "containerEnv": {
+    "FORCE_COLOR": "1"
+  },
+  "remoteUser": "vscode",
+  "postCreateCommand": "task collections && task setup",
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "4gb"
+  },
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  // Enable privileged mode for Kubernetes components
+  "runArgs": [
+    "--privileged",
+    "--security-opt",
+    "seccomp=unconfined",
+    "--cap-add=SYS_ADMIN",
+    "--cap-add=NET_ADMIN"
+  ],
+  // forward ports for the app
+  "forwardPorts": [
+    30000,
+    32000
+  ],
+  // add labels
+  "portsAttributes": {
+    "30000": {
+      "label": "Prometheus"
+    },
+    "32000": {
+      "label": "Grafana"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "task.vscode-task",
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml",
+        "samuelcolvin.jinjahtml",
+        "foxundermoon.shell-format",
+        "DavidAnson.vscode-markdownlint",
+        "EditorConfig.EditorConfig",
+        "wayou.vscode-todo-highlight",
+        // Customizations
+        "usernamehw.errorlens",
+        "PKief.material-icon-theme",
+        "arcticicestudio.nord-visual-studio-code",
+        "ms-vscode.sublime-keybindings"
+      ]
+    }
+  }
+}

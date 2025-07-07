@@ -1,0 +1,517 @@
+---
+- name: "Start K8s Control Plane and Worker Node in devcontainer"
+  hosts: [localhost]
+  connection: local
+  become: true
+  vars:
+    # --- User Configuration ---
+    devcontainer_user: "{{ ansible_env.SUDO_USER | default(ansible_env.USER) | default('vscode') }}"
+
+  tasks:
+    - name: "Pre-flight checks and setup"
+      tags: ["preflight"]
+      block:
+        - name: "Check | Verify required binaries exist"
+          ansible.builtin.stat:
+            path: "{{ bin_path }}/{{ item }}"
+          register: binary_check
+          failed_when: not binary_check.stat.exists
+          loop:
+            - etcd
+            - kube-apiserver
+            - kube-controller-manager
+            - kube-scheduler
+            - kubelet
+            - containerd
+
+        - name: "Check | Verify required certificates exist"
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          register: cert_check
+          failed_when: not cert_check.stat.exists
+          loop:
+            - "{{ pki_path }}/ca.crt"
+            - "{{ pki_path }}/apiserver.crt"
+            - "{{ pki_path }}/apiserver.key"
+            - "{{ config_path }}/token.csv"
+
+        - name: "Check | Read bearer token"
+          ansible.builtin.slurp:
+            src: "{{ config_path }}/token.csv"
+          register: token_file_content
+
+        - name: "Check | Set bearer token fact"
+          ansible.builtin.set_fact:
+            api_bearer_token: "{{ (token_file_content.content | b64decode).split(',')[0] }}"
+
+        - name: "Setup | Create /dev/kmsg for kubelet (devcontainer fix)"
+          ansible.builtin.shell: |
+            if [ ! -e /dev/kmsg ]; then
+              mknod /dev/kmsg c 1 11
+              chmod 644 /dev/kmsg
+            fi
+          register: kmsg_setup
+          changed_when: kmsg_setup.rc == 0
+
+        - name: "Setup | Get node IP address"
+          ansible.builtin.shell: |
+            hostname -I | awk '{print $1}'
+          register: node_ip_result
+          changed_when: false
+
+        - name: "Setup | Set node IP fact"
+          ansible.builtin.set_fact:
+            node_ip: "{{ node_ip_result.stdout.strip() }}"
+
+
+
+    - name: "Start Control Plane components"
+      tags: ["control-plane", "start"]
+      block:
+        ################################################################
+        # ┌─┐┌─┐┌┐┌┌┬┐┌─┐┬┌┐┌┌─┐┬─┐┌┬┐
+        # │  │ ││││ │ ├─┤││││├┤ ├┬┘ ││
+        # └─┘└─┘┘└┘ ┴ ┴ ┴┴┘└┘└─┘┴└──┴┘
+        ################################################################
+        - name: "Start | Start containerd"
+          environment:
+            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
+          ansible.builtin.shell: |
+            nohup {{ bin_path }}/containerd \
+              -c /etc/containerd/config.toml \
+              --log-level=info \
+              > {{ kubernetes_log_path }}/containerd.log 2>&1 &
+            echo $! > /tmp/containerd.pid
+            sleep 3
+          register: containerd_start
+          changed_when: true
+
+        - name: "Start | Wait for containerd socket"
+          ansible.builtin.stat:
+            path: /var/run/containerd/containerd.sock
+          register: containerd_socket
+          until: containerd_socket.stat.exists
+          retries: 10
+          delay: 2
+
+        - name: "Start | Test containerd"
+          ansible.builtin.shell: |
+            {{ bin_path }}/ctr version
+          register: containerd_test
+          retries: 3
+          delay: 2
+
+        ################################################################
+        # ┌─┐┌┬┐┌─┐┌┬┐
+        # ├┤  │ │   ││
+        # └─┘ ┴ └─┘─┴┘
+        ################################################################
+        - name: "Start | Start etcd"
+          ansible.builtin.shell: |
+            nohup {{ bin_path }}/etcd \
+              --data-dir {{ etcd_data_path }} \
+              --advertise-client-urls http://{{ node_ip }}:2379 \
+              --listen-client-urls http://0.0.0.0:2379 \
+              --listen-peer-urls http://0.0.0.0:2380 \
+              --initial-cluster default=http://{{ node_ip }}:2380 \
+              --initial-advertise-peer-urls http://{{ node_ip }}:2380 \
+              --initial-cluster-token etcd-cluster-0 \
+              --initial-cluster-state new \
+              --log-level info \
+              > {{ kubernetes_log_path }}/etcd.log 2>&1 &
+            echo $! > /tmp/etcd.pid
+            sleep 3
+          register: etcd_start
+          changed_when: true
+
+        - name: "Start | Wait for etcd to be healthy"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:2379/health
+            status_code: 200
+          register: etcd_health
+          until: etcd_health.status == 200
+          retries: 20
+          delay: 3
+
+        ################################################################
+        # ┬┌─┬ ┬┌┐ ┌─┐  ┌─┐┌─┐┬┌─┐┌─┐┬─┐┬  ┬┌─┐┬─┐
+        # ├┴┐│ │├┴┐├┤───├─┤├─┘│└─┐├┤ ├┬┘└┐┌┘├┤ ├┬┘
+        # ┴ ┴└─┘└─┘└─┘  ┴ ┴┴  ┴└─┘└─┘┴└─ └┘ └─┘┴└─
+        ################################################################
+        - name: "Start | Start kube-apiserver"
+          ansible.builtin.shell: |
+            nohup {{ bin_path }}/kube-apiserver \
+              --etcd-servers=http://{{ node_ip }}:2379 \
+              --service-cluster-ip-range={{ service_cidr }} \
+              --bind-address=0.0.0.0 \
+              --secure-port=6443 \
+              --advertise-address={{ node_ip }} \
+              --authorization-mode=AlwaysAllow \
+              --token-auth-file={{ config_path }}/token.csv \
+              --enable-priority-and-fairness=false \
+              --allow-privileged=true \
+              --profiling=false \
+              --storage-backend=etcd3 \
+              --v=0 \
+              --cloud-provider=external \
+              --service-account-issuer=https://kubernetes.default.svc.cluster.local \
+              --service-account-key-file={{ pki_path }}/sa.pub \
+              --service-account-signing-key-file={{ pki_path }}/sa.key \
+              --client-ca-file={{ pki_path }}/ca.crt \
+              --enable-admission-plugins=NodeRestriction \
+              --kubelet-client-certificate={{ pki_path }}/apiserver.crt \
+              --kubelet-client-key={{ pki_path }}/apiserver.key \
+              --runtime-config=api/all=true \
+              --tls-cert-file={{ pki_path }}/apiserver.crt \
+              --tls-private-key-file={{ pki_path }}/apiserver.key \
+              > {{ kubernetes_log_path }}/kube-apiserver.log 2>&1 &
+            echo $! > /tmp/kube-apiserver.pid
+            sleep 5
+          register: apiserver_start
+          changed_when: true
+
+        - name: "Start | Wait for kube-apiserver to be ready"
+          ansible.builtin.uri:
+            url: https://127.0.0.1:6443/livez
+            method: GET
+            validate_certs: false
+            headers:
+              Authorization: "Bearer {{ api_bearer_token }}"
+            status_code: 200
+          register: apiserver_health
+          until: apiserver_health.status == 200
+          retries: 30
+          delay: 5
+
+        ################################################################
+        # ┬┌─┬ ┬┌┐ ┌─┐  ┌─┐┌─┐┌┐┌┌┬┐┬─┐┌─┐┬  ┬  ┌─┐┬─┐   ┌┬┐┌─┐┌┐┌┌─┐┌─┐┌─┐┬─┐
+        # ├┴┐│ │├┴┐├┤───│  │ ││││ │ ├┬┘│ ││  │  ├┤ ├┬┘───│││├─┤│││├─┤│ ┬├┤ ├┬┘
+        # ┴ ┴└─┘└─┘└─┘  └─┘└─┘┘└┘ ┴ ┴└─└─┘┴─┘┴─┘└─┘┴└─   ┴ ┴┴ ┴┘└┘┴ ┴└─┘└─┘┴└─
+        ################################################################
+        - name: "Start | Start kube-controller-manager"
+          environment:
+            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
+          ansible.builtin.shell: |
+            nohup {{ bin_path }}/kube-controller-manager \
+              --kubeconfig={{ config_path }}/kube-controller-manager.kubeconfig \
+              --leader-elect=false \
+              --cloud-provider=external \
+              --service-cluster-ip-range={{ service_cidr }} \
+              --cluster-name=kubernetes \
+              --root-ca-file={{ pki_path }}/ca.crt \
+              --service-account-private-key-file={{ pki_path }}/sa.key \
+              --use-service-account-credentials=true \
+              --bind-address={{ node_ip }} \
+              --v=2 \
+              > {{ kubernetes_log_path }}/kube-controller-manager.log 2>&1 &
+            echo $! > /tmp/kube-controller-manager.pid
+            sleep 3
+          register: controller_manager_start
+          changed_when: true
+
+        ################################################################
+        # ┬┌─┬ ┬┌┐ ┌─┐  ┌─┐┌─┐┬ ┬┌─┐┌┬┐┬ ┬┬  ┌─┐┬─┐
+        # ├┴┐│ │├┴┐├┤───└─┐│  ├─┤├┤  │││ ││  ├┤ ├┬┘
+        # ┴ ┴└─┘└─┘└─┘  └─┘└─┘┴ ┴└─┘─┴┘└─┘┴─┘└─┘┴└─
+        ################################################################
+        - name: "Start | Start kube-scheduler"
+          ansible.builtin.shell: |
+            nohup {{ bin_path }}/kube-scheduler \
+              --kubeconfig={{ config_path }}/kube-scheduler.kubeconfig \
+              --leader-elect=false \
+              --bind-address={{ node_ip }} \
+              --v=2 \
+              > {{ kubernetes_log_path }}/kube-scheduler.log 2>&1 &
+            echo $! > /tmp/kube-scheduler.pid
+            sleep 3
+          register: scheduler_start
+          changed_when: true
+
+        - name: "Start | Create kubelet config with DISABLED cgroup enforcement"
+          ansible.builtin.copy:
+            dest: "{{ kubelet_data_path }}/config.yaml"
+            mode: '0644'
+            content: |
+              apiVersion: kubelet.config.k8s.io/v1beta1
+              kind: KubeletConfiguration
+              authentication:
+                anonymous:
+                  enabled: true
+                webhook:
+                  enabled: true
+                x509:
+                  clientCAFile: "{{ pki_path }}/ca.crt"
+              authorization:
+                mode: AlwaysAllow
+              clusterDomain: "cluster.local"
+              clusterDNS:
+                - "{{ clusterDNS }}"
+              resolvConf: "/etc/resolv.conf"
+              runtimeRequestTimeout: "15m"
+              failSwapOn: false
+              seccompDefault: true
+              serverTLSBootstrap: false
+              containerRuntimeEndpoint: "unix:///var/run/containerd/containerd.sock"
+              staticPodPath: "/etc/kubernetes/manifests"
+              makeIPTablesUtilChains: false
+              cgroupDriver: "cgroupfs"
+              # CRITICAL: Disable cgroup enforcement that causes crashes in devcontainer
+              enforceNodeAllocatable: []
+              # Disable cgroup creation for system components
+              cgroupsPerQOS: false
+              cgroupRoot: "/"
+
+        ################################################################
+        # ┬┌─┬ ┬┌┐ ┌─┐┬  ┌─┐┌┬┐
+        # ├┴┐│ │├┴┐├┤ │  ├┤  │
+        # ┴ ┴└─┘└─┘└─┘┴─┘└─┘ ┴
+        ################################################################
+        - name: "Start | Start kubelet"
+          environment:
+            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
+          ansible.builtin.shell: |
+            nohup {{ bin_path }}/kubelet \
+              --kubeconfig={{ kubelet_data_path }}/kubeconfig \
+              --config={{ kubelet_data_path }}/config.yaml \
+              --hostname-override={{ ansible_hostname }} \
+              --node-ip={{ node_ip }} \
+              --pod-infra-container-image=registry.k8s.io/pause:3.10 \
+              --max-pods=4  \
+              --v=1 \
+                > {{ kubernetes_log_path }}/kubelet.log 2>&1 &
+            echo $! > /tmp/kubelet.pid
+            sleep 5
+          register: kubelet_start
+          changed_when: true
+
+        - name: "Start | Wait for kubelet to initialize"
+          ansible.builtin.pause:
+            seconds: 10
+
+    - name: "Verify cluster health"
+      tags: ["verify", "health"]
+      block:
+        - name: "Health | Test kubectl access"
+          ansible.builtin.shell:
+            cmd: "kubectl cluster-info"
+          register: kubectl_test
+          retries: 5
+          delay: 3
+          changed_when: false
+
+        - name: "Health | Wait for node to register"
+          ansible.builtin.shell:
+            cmd: "kubectl get nodes --no-headers | wc -l"
+          register: node_count
+          until: node_count.stdout|int > 0
+          retries: 30
+          delay: 10
+          changed_when: false
+
+        - name: "Health | Check node status"
+          ansible.builtin.shell:
+            cmd: "kubectl get nodes"
+          register: node_status_check
+          changed_when: false
+
+        - name: "Health | Wait for node to become Ready (with timeout)"
+          ansible.builtin.shell:
+            cmd: >-
+              kubectl get nodes {{ ansible_hostname }} -o json |
+              jq -r '.status.conditions[] |
+              select(.type == "Ready" and .status == "True") | .type'
+          register: node_ready_status
+          until: node_ready_status.stdout == "Ready"
+          retries: 60
+          delay: 10
+          changed_when: false
+          failed_when: false
+
+        - name: "Health | Check control plane components"
+          ansible.builtin.shell:
+            cmd: "kubectl get componentstatuses"
+          register: component_status
+          failed_when: false
+          changed_when: false
+
+    - name: "Create cluster status report"
+      tags: ["status", "report"]
+      block:
+        - name: "Status | Check running processes"
+          ansible.builtin.shell:
+            cmd: |
+              #!/bin/bash
+              components="containerd etcd kube-apiserver kube-controller-manager kube-scheduler kubelet"
+              running_procs=""
+
+              for component in $components; do
+                if [ -f "/tmp/${component}.pid" ]; then
+                  pid=$(cat /tmp/${component}.pid)
+                  if ps -p $pid > /dev/null 2>&1; then
+                    running_procs="${running_procs}✅ $component (PID: $pid)\n"
+                  else
+                    running_procs="${running_procs}❌ $component (dead)\n"
+                  fi
+                else
+                  running_procs="${running_procs}❌ $component (no PID)\n"
+                fi
+              done
+
+              echo -e "$running_procs"
+            executable: /bin/bash
+          register: process_status
+          changed_when: false
+
+        - name: "Status | Get cluster info"
+          ansible.builtin.shell:
+            cmd: |
+              echo "=== CLUSTER INFO ==="
+              kubectl cluster-info 2>/dev/null || echo "❌ API server not responding"
+              echo ""
+              echo "=== NODES ==="
+              kubectl get nodes -o wide 2>/dev/null || echo "❌ Nodes not available"
+              echo ""
+              echo "=== SYSTEM PODS ==="
+              kubectl get pods -A 2>/dev/null || echo "❌ Cannot list pods"
+              echo ""
+              echo "=== CLUSTER HEALTH ==="
+              kubectl get --raw=/livez?verbose 2>/dev/null || echo "❌ Cluster health check failed"
+          register: cluster_info
+          failed_when: false
+          changed_when: false
+
+        - name: "Status | Check recent kubelet logs"
+          ansible.builtin.shell:
+            cmd: "tail -n 20 {{ kubernetes_log_path }}/kubelet.log 2>/dev/null || echo 'No kubelet logs found'"
+          register: kubelet_recent_logs
+          changed_when: false
+
+        - name: "Status | Display final status"
+          ansible.builtin.debug:
+            msg:
+              - "================================================================"
+              - "🚀 KUBERNETES CONTROL PLANE + WORKER NODE STARTED"
+              - "================================================================"
+              - ""
+              - "🔄 RUNNING PROCESSES:"
+              - "{{ process_status.stdout }}"
+              - ""
+              - "☸️  CLUSTER STATUS:"
+              - "{{ cluster_info.stdout }}"
+              - ""
+              - "📋 RECENT KUBELET LOGS:"
+              - "{{ kubelet_recent_logs.stdout }}"
+              - ""
+              - "📋 MANAGEMENT:"
+              - "• Check processes: ps aux | grep -E '(etcd|kube-|containerd)'"
+              - "• View logs: tail -f {{ kubernetes_log_path }}/[component].log"
+              - "• Stop cluster: kill $(cat /tmp/*.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/*.pid"
+              - ""
+              - "🧪 TEST COMMANDS:"
+              - "kubectl get nodes"
+              - "kubectl get all -A"
+              - "kubectl run test-pod --image=nginx --restart=Never"
+              - "kubectl get pods"
+              - ""
+              - "📁 LOG LOCATIONS:"
+              - "{{ kubernetes_log_path }}/"
+              - "================================================================"
+
+        - name: "Status | Create simple status script"
+          ansible.builtin.copy:
+            dest: "/home/{{ devcontainer_user }}/k8s-status.sh"
+            mode: '0755'
+            owner: "{{ devcontainer_user }}"
+            group: "{{ devcontainer_user }}"
+            content: |
+              #!/bin/bash
+              echo "=== K8s Process Status ==="
+              components=(containerd etcd kube-apiserver kube-controller-manager kube-scheduler kubelet)
+              for comp in "${components[@]}"; do
+                if [ -f "/tmp/${comp}.pid" ]; then
+                  pid=$(cat /tmp/${comp}.pid)
+                  if ps -p $pid > /dev/null 2>&1; then
+                    echo "✅ $comp (PID: $pid)"
+                  else
+                    echo "❌ $comp (dead)"
+                  fi
+                else
+                  echo "❌ $comp (no PID)"
+                fi
+              done
+              echo ""
+              echo "=== Cluster Status ==="
+              kubectl get nodes 2>/dev/null || echo "❌ API server not responding"
+              echo ""
+              echo "=== Recent Kubelet Logs ==="
+              tail -n 10 {{ kubernetes_log_path }}/kubelet.log 2>/dev/null || echo "No kubelet logs found"
+
+        - name: "Status | Create simple stop script"
+          ansible.builtin.copy:
+            dest: "/home/{{ devcontainer_user }}/k8s-stop.sh"
+            mode: '0755'
+            owner: "{{ devcontainer_user }}"
+            group: "{{ devcontainer_user }}"
+            content: |
+              #!/bin/bash
+              echo "Stopping Kubernetes components..."
+              components=(kubelet kube-scheduler kube-controller-manager kube-apiserver etcd containerd)
+              for comp in "${components[@]}"; do
+                if [ -f "/tmp/${comp}.pid" ]; then
+                  pid=$(cat /tmp/${comp}.pid)
+                  if ps -p $pid > /dev/null 2>&1; then
+                    echo "Stopping $comp (PID: $pid)..."
+                    sudo kill $pid
+                    rm -f /tmp/${comp}.pid
+                  fi
+                fi
+              done
+              # Force kill any remaining processes
+              sudo pkill -f "etcd|kube-|containerd|kubelet" 2>/dev/null || true
+              echo "All components stopped."
+
+    - name: "Debug cluster issues"
+      tags: ["debug", "never"]
+      block:
+        - name: "Debug | Check containerd socket"
+          ansible.builtin.stat:
+            path: /var/run/containerd/containerd.sock
+          register: containerd_socket_debug
+
+        - name: "Debug | Check kubelet logs"
+          ansible.builtin.shell:
+            cmd: "tail -n 50 {{ kubernetes_log_path }}/kubelet.log 2>/dev/null || echo 'No kubelet logs'"
+          register: kubelet_logs
+          failed_when: false
+          changed_when: false
+
+        - name: "Debug | Check API server logs"
+          ansible.builtin.shell:
+            cmd: "tail -n 20 {{ kubernetes_log_path }}/kube-apiserver.log 2>/dev/null || echo 'No API server logs'"
+          register: apiserver_logs
+          failed_when: false
+          changed_when: false
+
+        - name: "Debug | Test containerd"
+          ansible.builtin.shell:
+            cmd: "{{ bin_path }}/ctr version"
+          register: containerd_test_debug
+          failed_when: false
+          changed_when: false
+
+        - name: "Debug | Display debug info"
+          ansible.builtin.debug:
+            msg:
+              - "=== CONTAINERD SOCKET ==="
+              - "Exists: {{ containerd_socket_debug.stat.exists }}"
+              - "Path: /var/run/containerd/containerd.sock"
+              - ""
+              - "=== CONTAINERD TEST ==="
+              - "{{ containerd_test_debug.stdout }}"
+              - "{{ containerd_test_debug.stderr }}"
+              - ""
+              - "=== KUBELET LOGS (last 50 lines) ==="
+              - "{{ kubelet_logs.stdout }}"
+              - ""
+              - "=== API SERVER LOGS (last 20 lines) ==="
+              - "{{ apiserver_logs.stdout }}"

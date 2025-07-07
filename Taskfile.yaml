@@ -50,10 +50,10 @@ tasks:
       - echo {{.VERSION}}
 
   setup:
-    desc: "Create bin directory and install dependencies"
+    desc: "install dependencies"
     cmds:
-      - mkdir -p {{.LOCALBIN}}
-    silent: true
+      - task: tidy
+      - go mod download
 
   tidy:
     desc: "Run `go mod tidy` on the project."
@@ -219,6 +219,12 @@ tasks:
     desc: "Init Podman machine"
     dir: "{{.USER_WORKING_DIR}}"
     cmds: ["./scripts/init.sh"]
+
+  collections:
+    desc: "Install Ansible collections"
+    dir: "{{.USER_WORKING_DIR}}/ansible"
+    cmds:
+      - ansible-galaxy collection install -r requirements.yml
 
   ssh:
     desc: "SSH into the Podman machine"
