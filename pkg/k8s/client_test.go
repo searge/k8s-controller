@@ -24,8 +24,12 @@ import (
 const (
 	fakeServerURL        = "https://fake-server"
 	testImageNginx       = "nginx:1.21"
+	testImageRedis       = "redis:6.2"
+	testImagePostgres    = "postgres:13"
+	testImageBusybox     = "busybox:latest"
 	testNamespaceDefault = "default"
 	testNamespaceKube    = "kube-system"
+	testMsgFailedClose   = "Failed to close client"
 )
 
 // TestGetDefaultKubeconfigPath tests the default kubeconfig path resolution.
@@ -254,8 +258,8 @@ func TestListDeployments(t *testing.T) {
 			name: "list deployments from all namespaces",
 			deployments: []runtime.Object{
 				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
-				createTestDeployment("app2", testNamespaceKube, 1, []string{"busybox:latest"}),
-				createTestDeployment("app3", testNamespaceDefault, 2, []string{"redis:6.2", "postgres:13"}),
+				createTestDeployment("app2", testNamespaceKube, 1, []string{testImageBusybox}),
+				createTestDeployment("app3", testNamespaceDefault, 2, []string{testImageRedis, testImagePostgres}),
 			},
 			options: ListDeploymentsOptions{
 				Namespace: "", // All namespaces
@@ -268,8 +272,8 @@ func TestListDeployments(t *testing.T) {
 			name: "list deployments from specific namespace",
 			deployments: []runtime.Object{
 				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
-				createTestDeployment("app2", testNamespaceKube, 1, []string{"busybox:latest"}),
-				createTestDeployment("app3", testNamespaceDefault, 2, []string{"redis:6.2"}),
+				createTestDeployment("app2", testNamespaceKube, 1, []string{testImageBusybox}),
+				createTestDeployment("app3", testNamespaceDefault, 2, []string{testImageRedis}),
 			},
 			options: ListDeploymentsOptions{
 				Namespace: testNamespaceDefault,
@@ -415,15 +419,15 @@ func TestExtractImages(t *testing.T) {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
-								{Name: "web", Image: "nginx:1.21"},
-								{Name: "db", Image: "postgres:13"},
-								{Name: "cache", Image: "redis:6.2"},
+								{Name: "web", Image: testImageNginx},
+								{Name: "db", Image: testImagePostgres},
+								{Name: "cache", Image: testImageRedis},
 							},
 						},
 					},
 				},
 			},
-			expectedImages: []string{"nginx:1.21", "postgres:13", "redis:6.2"},
+			expectedImages: []string{testImageNginx, testImagePostgres, testImageRedis},
 		},
 		{
 			name: "containers with duplicate images",
@@ -432,15 +436,15 @@ func TestExtractImages(t *testing.T) {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
-								{Name: "web1", Image: "nginx:1.21"},
-								{Name: "web2", Image: "nginx:1.21"},
-								{Name: "db", Image: "postgres:13"},
+								{Name: "web1", Image: testImageNginx},
+								{Name: "web2", Image: testImageNginx},
+								{Name: "db", Image: testImagePostgres},
 							},
 						},
 					},
 				},
 			},
-			expectedImages: []string{"nginx:1.21", "postgres:13"},
+			expectedImages: []string{testImageNginx, testImagePostgres},
 		},
 		{
 			name: "init containers and regular containers",
@@ -449,16 +453,16 @@ func TestExtractImages(t *testing.T) {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							InitContainers: []corev1.Container{
-								{Name: "init", Image: "busybox:latest"},
+								{Name: "init", Image: testImageBusybox},
 							},
 							Containers: []corev1.Container{
-								{Name: "app", Image: "nginx:1.21"},
+								{Name: "app", Image: testImageNginx},
 							},
 						},
 					},
 				},
 			},
-			expectedImages: []string{"nginx:1.21", "busybox:latest"},
+			expectedImages: []string{testImageNginx, testImageBusybox},
 		},
 		{
 			name: "empty image names should be ignored",
@@ -467,14 +471,14 @@ func TestExtractImages(t *testing.T) {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
-								{Name: "valid", Image: "nginx:1.21"},
+								{Name: "valid", Image: testImageNginx},
 								{Name: "empty", Image: ""},
 							},
 						},
 					},
 				},
 			},
-			expectedImages: []string{"nginx:1.21"},
+			expectedImages: []string{testImageNginx},
 		},
 	}
 
@@ -626,7 +630,7 @@ func ExampleCreateClient() {
 	}
 	defer func() {
 		if err := client.Close(); err != nil {
-			logger.Error().Err(err).Msg("Failed to close client")
+			logger.Error().Err(err).Msg(testMsgFailedClose)
 		}
 	}()
 
@@ -651,7 +655,7 @@ func ExampleClient_TestConnection() {
 	}
 	defer func() {
 		if err := client.Close(); err != nil {
-			logger.Error().Err(err).Msg("Failed to close client")
+			logger.Error().Err(err).Msg(testMsgFailedClose)
 		}
 	}()
 
