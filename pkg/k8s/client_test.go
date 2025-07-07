@@ -20,8 +20,13 @@ import (
 	ktesting "k8s.io/client-go/testing"
 )
 
-// A constant for fake server URL
-const fakeServerURL string = "https://fake-server"
+// Test constants to avoid string duplication
+const (
+	fakeServerURL        = "https://fake-server"
+	testImageNginx       = "nginx:1.21"
+	testNamespaceDefault = "default"
+	testNamespaceKube    = "kube-system"
+)
 
 // TestGetDefaultKubeconfigPath tests the default kubeconfig path resolution.
 func TestGetDefaultKubeconfigPath(t *testing.T) {
@@ -248,9 +253,9 @@ func TestListDeployments(t *testing.T) {
 		{
 			name: "list deployments from all namespaces",
 			deployments: []runtime.Object{
-				createTestDeployment("app1", "default", 3, []string{"nginx:1.21"}),
-				createTestDeployment("app2", "kube-system", 1, []string{"busybox:latest"}),
-				createTestDeployment("app3", "default", 2, []string{"redis:6.2", "postgres:13"}),
+				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
+				createTestDeployment("app2", testNamespaceKube, 1, []string{"busybox:latest"}),
+				createTestDeployment("app3", testNamespaceDefault, 2, []string{"redis:6.2", "postgres:13"}),
 			},
 			options: ListDeploymentsOptions{
 				Namespace: "", // All namespaces
@@ -262,12 +267,12 @@ func TestListDeployments(t *testing.T) {
 		{
 			name: "list deployments from specific namespace",
 			deployments: []runtime.Object{
-				createTestDeployment("app1", "default", 3, []string{"nginx:1.21"}),
-				createTestDeployment("app2", "kube-system", 1, []string{"busybox:latest"}),
-				createTestDeployment("app3", "default", 2, []string{"redis:6.2"}),
+				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
+				createTestDeployment("app2", testNamespaceKube, 1, []string{"busybox:latest"}),
+				createTestDeployment("app3", testNamespaceDefault, 2, []string{"redis:6.2"}),
 			},
 			options: ListDeploymentsOptions{
-				Namespace: "default",
+				Namespace: testNamespaceDefault,
 			},
 			expectedCount: 2,
 			expectedNames: []string{"app1", "app3"},
@@ -276,7 +281,7 @@ func TestListDeployments(t *testing.T) {
 		{
 			name: "list deployments from empty namespace",
 			deployments: []runtime.Object{
-				createTestDeployment("app1", "default", 3, []string{"nginx:1.21"}),
+				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
 			},
 			options: ListDeploymentsOptions{
 				Namespace: "empty-namespace",
@@ -298,7 +303,7 @@ func TestListDeployments(t *testing.T) {
 		{
 			name: "API error on list",
 			deployments: []runtime.Object{
-				createTestDeployment("app1", "default", 3, []string{"nginx:1.21"}),
+				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
 			},
 			options: ListDeploymentsOptions{
 				Namespace: "",
@@ -395,13 +400,13 @@ func TestExtractImages(t *testing.T) {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
-								{Name: "web", Image: "nginx:1.21"},
+								{Name: "web", Image: testImageNginx},
 							},
 						},
 					},
 				},
 			},
-			expectedImages: []string{"nginx:1.21"},
+			expectedImages: []string{testImageNginx},
 		},
 		{
 			name: "multiple containers with different images",
@@ -584,7 +589,7 @@ func BenchmarkListDeployments(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		deployments[i] = createTestDeployment(
 			fmt.Sprintf("app-%d", i),
-			"default",
+			testNamespaceDefault,
 			3,
 			[]string{fmt.Sprintf("nginx:1.%d", i%10)},
 		)
@@ -692,7 +697,7 @@ func ExampleClient_ListDeployments() {
 
 	// List deployments from specific namespace
 	nsDeployments, err := client.ListDeployments(ctx, ListDeploymentsOptions{
-		Namespace: "kube-system",
+		Namespace: testNamespaceKube,
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to list namespace deployments")
@@ -701,7 +706,7 @@ func ExampleClient_ListDeployments() {
 
 	logger.Info().
 		Int("count", len(nsDeployments)).
-		Str("namespace", "kube-system").
+		Str("namespace", testNamespaceKube).
 		Msg("Listed deployments from namespace")
 
 	// List deployments with label selector

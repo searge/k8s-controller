@@ -9,6 +9,18 @@ import (
 	"github.com/Searge/k8s-controller/pkg/k8s"
 )
 
+// Test constants to avoid string duplication
+const (
+	testImageNginx        = "nginx:1.21"
+	testImageRedis        = "redis:6.2"
+	testImagePostgres     = "postgres:13"
+	testImageBusybox      = "busybox:latest"
+	testDeploymentName    = "test-deployment"
+	testNamespaceDefault  = "default"
+	testNamespaceKube     = "kube-system"
+	testMessageCloseError = "Failed to close client"
+)
+
 // TestListCommandDefined verifies that the list command is properly defined
 // and configured with the expected properties.
 func TestListCommandDefined(t *testing.T) {
@@ -100,10 +112,8 @@ func createFlagParsingTestCases() []struct {
 } {
 	// Define test constants to avoid duplication
 	const (
-		defaultNS    = "default"
-		kubeSystemNS = "kube-system"
-		tableFormat  = "table"
-		jsonFormat   = "json"
+		tableFormat = "table"
+		jsonFormat  = "json"
 	)
 
 	return []struct {
@@ -122,15 +132,15 @@ func createFlagParsingTestCases() []struct {
 		},
 		{
 			name:              "namespace flag",
-			args:              []string{"--namespace=" + defaultNS},
-			expectedNamespace: defaultNS,
+			args:              []string{"--namespace=" + testNamespaceDefault},
+			expectedNamespace: testNamespaceDefault,
 			expectedOutput:    tableFormat,
 			shouldErr:         false,
 		},
 		{
 			name:              "namespace short flag",
-			args:              []string{"-n", kubeSystemNS},
-			expectedNamespace: kubeSystemNS,
+			args:              []string{"-n", testNamespaceKube},
+			expectedNamespace: testNamespaceKube,
 			expectedOutput:    tableFormat,
 			shouldErr:         false,
 		},
@@ -150,8 +160,8 @@ func createFlagParsingTestCases() []struct {
 		},
 		{
 			name:              "both flags",
-			args:              []string{"-n", defaultNS, "-o", jsonFormat},
-			expectedNamespace: defaultNS,
+			args:              []string{"-n", testNamespaceDefault, "-o", jsonFormat},
+			expectedNamespace: testNamespaceDefault,
 			expectedOutput:    jsonFormat,
 			shouldErr:         false,
 		},
@@ -233,16 +243,14 @@ func TestValidateOutputFormat(t *testing.T) {
 
 // TestValidateNamespace tests the namespace validation function.
 func TestValidateNamespace(t *testing.T) {
-	const kubeSystemNS = "kube-system" // Define constant to avoid duplication
-
 	tests := []struct {
 		name      string
 		namespace string
 		shouldErr bool
 	}{
 		{"empty namespace", "", false}, // Empty means all namespaces
-		{"valid namespace", "default", false},
-		{"valid namespace with hyphen", kubeSystemNS, false},
+		{"valid namespace", testNamespaceDefault, false},
+		{"valid namespace with hyphen", testNamespaceKube, false},
 		{"valid namespace with numbers", "test123", false},
 		{"valid namespace with mixed", "app-v2", false},
 		{
@@ -315,8 +323,8 @@ func TestFormatImages(t *testing.T) {
 		},
 		{
 			name:     "single image",
-			images:   []string{"nginx:1.21"},
-			expected: "nginx:1.21",
+			images:   []string{testImageNginx},
+			expected: testImageNginx,
 		},
 		{
 			name:     "single long image",
@@ -325,18 +333,18 @@ func TestFormatImages(t *testing.T) {
 		},
 		{
 			name:     "two images",
-			images:   []string{"nginx:1.21", "redis:6.2"},
-			expected: "nginx:1.21,redis:6.2",
+			images:   []string{testImageNginx, testImageRedis},
+			expected: testImageNginx + "," + testImageRedis,
 		},
 		{
 			name:     "three images",
-			images:   []string{"nginx:1.21", "redis:6.2", "postgres:13"},
-			expected: "nginx:1.21,redis:6.2,postgres:13",
+			images:   []string{testImageNginx, testImageRedis, testImagePostgres},
+			expected: testImageNginx + "," + testImageRedis + "," + testImagePostgres,
 		},
 		{
 			name:     "many images",
-			images:   []string{"nginx:1.21", "redis:6.2", "postgres:13", "mysql:8.0", "mongodb:4.4"},
-			expected: "nginx:1.21,redis:6.2 +3 more",
+			images:   []string{testImageNginx, testImageRedis, testImagePostgres, "mysql:8.0", "mongodb:4.4"},
+			expected: testImageNginx + "," + testImageRedis + " +3 more",
 		},
 		{
 			name: "many long images",
@@ -422,7 +430,7 @@ func TestFormatDeploymentOutput(t *testing.T) {
 	testDeployments := []k8s.DeploymentInfo{
 		{
 			Name:      "nginx-deployment",
-			Namespace: "default",
+			Namespace: testNamespaceDefault,
 			Replicas: struct {
 				Desired   int32 `json:"desired"`
 				Available int32 `json:"available"`
@@ -433,7 +441,7 @@ func TestFormatDeploymentOutput(t *testing.T) {
 				Ready:     3,
 			},
 			Age:       24 * time.Hour,
-			Images:    []string{"nginx:1.21"},
+			Images:    []string{testImageNginx},
 			CreatedAt: time.Now().Add(-24 * time.Hour),
 		},
 	}
@@ -465,8 +473,8 @@ func TestFormatDeploymentOutput(t *testing.T) {
 func TestFormatDeploymentJSON(t *testing.T) {
 	testDeployments := []k8s.DeploymentInfo{
 		{
-			Name:      "test-deployment",
-			Namespace: "default",
+			Name:      testDeploymentName,
+			Namespace: testNamespaceDefault,
 			CreatedAt: time.Now(),
 		},
 	}
@@ -495,8 +503,8 @@ func TestFormatDeploymentTable(t *testing.T) {
 			name: "single deployment all namespaces",
 			deployments: []k8s.DeploymentInfo{
 				{
-					Name:      "test-deployment",
-					Namespace: "default",
+					Name:      testDeploymentName,
+					Namespace: testNamespaceDefault,
 					Replicas: struct {
 						Desired   int32 `json:"desired"`
 						Available int32 `json:"available"`
@@ -516,8 +524,8 @@ func TestFormatDeploymentTable(t *testing.T) {
 			name: "single deployment specific namespace",
 			deployments: []k8s.DeploymentInfo{
 				{
-					Name:      "test-deployment",
-					Namespace: "default",
+					Name:      testDeploymentName,
+					Namespace: testNamespaceDefault,
 					Replicas: struct {
 						Desired   int32 `json:"desired"`
 						Available int32 `json:"available"`
@@ -531,7 +539,7 @@ func TestFormatDeploymentTable(t *testing.T) {
 					Images: []string{"nginx:latest"},
 				},
 			},
-			namespace: "default", // Specific namespace
+			namespace: testNamespaceDefault, // Specific namespace
 		},
 	}
 
