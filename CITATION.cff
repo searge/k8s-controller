@@ -21,8 +21,8 @@ keywords:
   - cobra
   - containerization
   - infrastructure
-version: "0.1.0"
-date-released: "2025-01-16"
+version: "0.5.0"
+date-released: "2025-07-07"
 references:
   - type: software
     title: "Kubernetes Controller Tutorial Reference"

@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2025-07-07
+
+### 🚀 Features
+
+- *(k8s)* Add client-go integration with connection testing
+- *(cmd)* Add list deployments command with namespace filtering and output formats
+- *(ci)* Add CodeRabbit.ai config
+- *(cmd)* Enhance namespace validation with DNS label compliance
+- *(devcontainer)* Setup Kubernetes with Ansible playbooks and automation scripts (#5)
+
+### 🐛 Bug/Lint Fixes
+
+- *(client)* Add a constant instead RY
+- *(client)* Update func name to match expression
+- *(connection)* Add proper name
+- *(k8s)* Improve TestConnection timeout handling and server version logging
+- *(k8s)* Fixed the name of the example function for TestConnection
+- *(task)* Update dev, ci commands
+
+### 🚜 Refactor
+
+- *(cmd)* Reduce cognitive complexity and eliminate string duplication in tests
+- *(cmd)* Extract test case creation to reduce function length
+
+### ⚙️ Miscellaneous Tasks
+
+- *(config)* Update code owners file
+
+### Dep
+
+- *(go)* Integrate k8s libraries and updates go version
+
+### Deps
+
+- *(deps)* Bump github.com/valyala/fasthttp in the updates group
+
 ## [0.4.3] - 2025-06-24
 
 ### 🐛 Bug/Lint Fixes
