@@ -227,16 +227,39 @@
           register: scheduler_start
           changed_when: true
 
-    - name: "Start Worker Node (kubelet)"
-      tags: ["worker", "kubelet", "start"]
-      block:
-        - name: "Start | Prepare kubelet config for devcontainer"
-          ansible.builtin.template:
-            src: "kubelet-config-devc.yaml.j2"
+        - name: "Start | Create kubelet config with DISABLED cgroup enforcement"
+          ansible.builtin.copy:
             dest: "{{ kubelet_data_path }}/config.yaml"
             mode: '0644'
-            owner: "{{ devcontainer_user }}"
-            group: "{{ devcontainer_user }}"
+            content: |
+              apiVersion: kubelet.config.k8s.io/v1beta1
+              kind: KubeletConfiguration
+              authentication:
+                anonymous:
+                  enabled: true
+                webhook:
+                  enabled: true
+                x509:
+                  clientCAFile: "{{ pki_path }}/ca.crt"
+              authorization:
+                mode: AlwaysAllow
+              clusterDomain: "cluster.local"
+              clusterDNS:
+                - "{{ clusterDNS }}"
+              resolvConf: "/etc/resolv.conf"
+              runtimeRequestTimeout: "15m"
+              failSwapOn: false
+              seccompDefault: true
+              serverTLSBootstrap: false
+              containerRuntimeEndpoint: "unix:///var/run/containerd/containerd.sock"
+              staticPodPath: "/etc/kubernetes/manifests"
+              makeIPTablesUtilChains: false
+              cgroupDriver: "cgroupfs"
+              # CRITICAL: Disable cgroup enforcement that causes crashes in devcontainer
+              enforceNodeAllocatable: []
+              # Disable cgroup creation for system components
+              cgroupsPerQOS: false
+              cgroupRoot: "/"
 
         ################################################################
         # ┬┌─┬ ┬┌┐ ┌─┐┬  ┌─┐┌┬┐
@@ -317,10 +340,11 @@
         - name: "Status | Check running processes"
           ansible.builtin.shell:
             cmd: |
-              components=("containerd" "etcd" "kube-apiserver" "kube-controller-manager" "kube-scheduler" "kubelet")
+              #!/bin/bash
+              components="containerd etcd kube-apiserver kube-controller-manager kube-scheduler kubelet"
               running_procs=""
 
-              for component in "${components[@]}"; do
+              for component in $components; do
                 if [ -f "/tmp/${component}.pid" ]; then
                   pid=$(cat /tmp/${component}.pid)
                   if ps -p $pid > /dev/null 2>&1; then
@@ -334,6 +358,7 @@
               done
 
               echo -e "$running_procs"
+            executable: /bin/bash
           register: process_status
           changed_when: false
 
