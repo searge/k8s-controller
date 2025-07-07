@@ -68,9 +68,17 @@
     - name: "Start Control Plane components"
       tags: ["control-plane", "start"]
       block:
+        ################################################################
+        # ┌─┐┌─┐┌┐┌┌┬┐┌─┐┬┌┐┌┌─┐┬─┐┌┬┐
+        # │  │ ││││ │ ├─┤││││├┤ ├┬┘ ││
+        # └─┘└─┘┘└┘ ┴ ┴ ┴┴┘└┘└─┘┴└──┴┘
+        ################################################################
         - name: "Start | Start containerd"
+          environment:
+            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/containerd \
+              -c /etc/containerd/config.toml \
               --log-level=info \
               > {{ kubernetes_log_path }}/containerd.log 2>&1 &
             echo $! > /tmp/containerd.pid
@@ -93,6 +101,11 @@
           retries: 3
           delay: 2
 
+        ################################################################
+        # ┌─┐┌┬┐┌─┐┌┬┐
+        # ├┤  │ │   ││
+        # └─┘ ┴ └─┘─┴┘
+        ################################################################
         - name: "Start | Start etcd"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/etcd \
@@ -120,27 +133,37 @@
           retries: 20
           delay: 3
 
+        ################################################################
+        # ┬┌─┬ ┬┌┐ ┌─┐  ┌─┐┌─┐┬┌─┐┌─┐┬─┐┬  ┬┌─┐┬─┐
+        # ├┴┐│ │├┴┐├┤───├─┤├─┘│└─┐├┤ ├┬┘└┐┌┘├┤ ├┬┘
+        # ┴ ┴└─┘└─┘└─┘  ┴ ┴┴  ┴└─┘└─┘┴└─ └┘ └─┘┴└─
+        ################################################################
         - name: "Start | Start kube-apiserver"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/kube-apiserver \
-              --advertise-address={{ node_ip }} \
-              --allow-privileged=true \
-              --authorization-mode=AlwaysAllow \
-              --bind-address=0.0.0.0 \
-              --client-ca-file={{ pki_path }}/ca.crt \
-              --enable-admission-plugins=NodeRestriction \
               --etcd-servers=http://{{ node_ip }}:2379 \
-              --kubelet-client-certificate={{ pki_path }}/apiserver.crt \
-              --kubelet-client-key={{ pki_path }}/apiserver.key \
-              --runtime-config=api/all=true \
+              --service-cluster-ip-range={{ service_cidr }} \
+              --bind-address=0.0.0.0 \
+              --secure-port=6443 \
+              --advertise-address={{ node_ip }} \
+              --authorization-mode=AlwaysAllow \
+              --token-auth-file={{ config_path }}/token.csv \
+              --enable-priority-and-fairness=false \
+              --allow-privileged=true \
+              --profiling=false \
+              --storage-backend=etcd3 \
+              --v=0 \
+              --cloud-provider=external \
               --service-account-issuer=https://kubernetes.default.svc.cluster.local \
               --service-account-key-file={{ pki_path }}/sa.pub \
               --service-account-signing-key-file={{ pki_path }}/sa.key \
-              --service-cluster-ip-range={{ service_cidr }} \
+              --client-ca-file={{ pki_path }}/ca.crt \
+              --enable-admission-plugins=NodeRestriction \
+              --kubelet-client-certificate={{ pki_path }}/apiserver.crt \
+              --kubelet-client-key={{ pki_path }}/apiserver.key \
+              --runtime-config=api/all=true \
               --tls-cert-file={{ pki_path }}/apiserver.crt \
               --tls-private-key-file={{ pki_path }}/apiserver.key \
-              --token-auth-file={{ config_path }}/token.csv \
-              --v=2 \
               > {{ kubernetes_log_path }}/kube-apiserver.log 2>&1 &
             echo $! > /tmp/kube-apiserver.pid
             sleep 5
@@ -160,14 +183,21 @@
           retries: 30
           delay: 5
 
+        ################################################################
+        # ┬┌─┬ ┬┌┐ ┌─┐  ┌─┐┌─┐┌┐┌┌┬┐┬─┐┌─┐┬  ┬  ┌─┐┬─┐   ┌┬┐┌─┐┌┐┌┌─┐┌─┐┌─┐┬─┐
+        # ├┴┐│ │├┴┐├┤───│  │ ││││ │ ├┬┘│ ││  │  ├┤ ├┬┘───│││├─┤│││├─┤│ ┬├┤ ├┬┘
+        # ┴ ┴└─┘└─┘└─┘  └─┘└─┘┘└┘ ┴ ┴└─└─┘┴─┘┴─┘└─┘┴└─   ┴ ┴┴ ┴┘└┘┴ ┴└─┘└─┘┴└─
+        ################################################################
         - name: "Start | Start kube-controller-manager"
+          environment:
+            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/kube-controller-manager \
               --kubeconfig={{ config_path }}/kube-controller-manager.kubeconfig \
-              --cluster-cidr={{ cluster_cidr }} \
+              --leader-elect=false \
+              --cloud-provider=external \
               --service-cluster-ip-range={{ service_cidr }} \
               --cluster-name=kubernetes \
-              --leader-elect=false \
               --root-ca-file={{ pki_path }}/ca.crt \
               --service-account-private-key-file={{ pki_path }}/sa.key \
               --use-service-account-credentials=true \
@@ -179,6 +209,11 @@
           register: controller_manager_start
           changed_when: true
 
+        ################################################################
+        # ┬┌─┬ ┬┌┐ ┌─┐  ┌─┐┌─┐┬ ┬┌─┐┌┬┐┬ ┬┬  ┌─┐┬─┐
+        # ├┴┐│ │├┴┐├┤───└─┐│  ├─┤├┤  │││ ││  ├┤ ├┬┘
+        # ┴ ┴└─┘└─┘└─┘  └─┘└─┘┴ ┴└─┘─┴┘└─┘┴─┘└─┘┴└─
+        ################################################################
         - name: "Start | Start kube-scheduler"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/kube-scheduler \
@@ -203,6 +238,11 @@
             owner: "{{ devcontainer_user }}"
             group: "{{ devcontainer_user }}"
 
+        ################################################################
+        # ┬┌─┬ ┬┌┐ ┌─┐┬  ┌─┐┌┬┐
+        # ├┴┐│ │├┴┐├┤ │  ├┤  │
+        # ┴ ┴└─┘└─┘└─┘┴─┘└─┘ ┴
+        ################################################################
         - name: "Start | Start kubelet"
           environment:
             PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
