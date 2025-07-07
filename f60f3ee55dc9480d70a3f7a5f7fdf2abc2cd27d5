@@ -1,0 +1,1 @@
+{"go-coverage-action-fmt":1,"coverage_pct":70.95588235294117,"pkg_stats":{"github.com/Searge/k8s-controller":[0],"github.com/Searge/k8s-controller/cmd":[61.68831168831169],"github.com/Searge/k8s-controller/pkg/k8s":[81.31868131868131],"github.com/Searge/k8s-controller/pkg/logger":[100],"github.com/Searge/k8s-controller/pkg/server":[86.66666666666667]},"skipped_count":0}
