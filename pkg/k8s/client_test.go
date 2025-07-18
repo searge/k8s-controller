@@ -245,280 +245,317 @@ func createTestDeployment(name, namespace string, replicas int32, images []strin
 func TestListDeployments(t *testing.T) {
 	logger := zerolog.New(os.Stderr)
 
-	tests := []struct {
-		name          string
-		deployments   []runtime.Object
-		options       ListDeploymentsOptions
-		expectedCount int
-		expectedNames []string
-		expectedError bool
-		errorOnList   bool
-	}{
-		{
-			name: "list deployments from all namespaces",
-			deployments: []runtime.Object{
-				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
-				createTestDeployment("app2", testNamespaceKube, 1, []string{testImageBusybox}),
-				createTestDeployment("app3", testNamespaceDefault, 2, []string{testImageRedis, testImagePostgres}),
-			},
-			options: ListDeploymentsOptions{
-				Namespace: "", // All namespaces
-			},
-			expectedCount: 3,
-			expectedNames: []string{"app1", "app2", "app3"},
-			expectedError: false,
-		},
-		{
-			name: "list deployments from specific namespace",
-			deployments: []runtime.Object{
-				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
-				createTestDeployment("app2", testNamespaceKube, 1, []string{testImageBusybox}),
-				createTestDeployment("app3", testNamespaceDefault, 2, []string{testImageRedis}),
-			},
-			options: ListDeploymentsOptions{
-				Namespace: testNamespaceDefault,
-			},
-			expectedCount: 2,
-			expectedNames: []string{"app1", "app3"},
-			expectedError: false,
-		},
-		{
-			name: "list deployments from empty namespace",
-			deployments: []runtime.Object{
-				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
-			},
-			options: ListDeploymentsOptions{
-				Namespace: "empty-namespace",
-			},
-			expectedCount: 0,
-			expectedNames: []string{},
-			expectedError: false,
-		},
-		{
-			name:        "no deployments exist",
-			deployments: []runtime.Object{},
-			options: ListDeploymentsOptions{
-				Namespace: "",
-			},
-			expectedCount: 0,
-			expectedNames: []string{},
-			expectedError: false,
-		},
-		{
-			name: "API error on list",
-			deployments: []runtime.Object{
-				createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
-			},
-			options: ListDeploymentsOptions{
-				Namespace: "",
-			},
-			expectedError: true,
-			errorOnList:   true,
-		},
-	}
+	tests := createListDeploymentTests()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create fake clientset with test data
-			fakeClientset := fake.NewSimpleClientset(tt.deployments...)
-
-			// Configure error simulation if needed
-			if tt.errorOnList {
-				fakeClientset.PrependReactor("list", "deployments",
-					func(_ ktesting.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, fmt.Errorf("simulated API error")
-					})
-			}
-
-			client := &Client{
-				clientset: fakeClientset,
-				config:    &rest.Config{Host: fakeServerURL},
-				logger:    logger,
-			}
+			client := setupTestClient(logger, tt.deployments, tt.errorOnList)
 
 			ctx := context.Background()
 			deployments, err := client.ListDeployments(ctx, tt.options)
 
-			// Check error expectation
-			if tt.expectedError {
-				if err == nil {
-					t.Errorf("ListDeployments() expected error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("ListDeployments() unexpected error: %v", err)
-				return
-			}
-
-			// Check deployment count
-			if len(deployments) != tt.expectedCount {
-				t.Errorf("ListDeployments() got %d deployments, want %d", len(deployments), tt.expectedCount)
-			}
-
-			// Check deployment names
-			actualNames := make([]string, len(deployments))
-			for i, deployment := range deployments {
-				actualNames[i] = deployment.Name
-			}
-
-			// Sort both slices for comparison (order may vary)
-			if !stringSlicesEqual(actualNames, tt.expectedNames) {
-				t.Errorf("ListDeployments() got names %v, want %v", actualNames, tt.expectedNames)
-			}
-
-			// Verify deployment info structure
-			for _, deployment := range deployments {
-				if deployment.Name == "" {
-					t.Error("Deployment name should not be empty")
-				}
-				if deployment.Namespace == "" {
-					t.Error("Deployment namespace should not be empty")
-				}
-				if deployment.CreatedAt.IsZero() {
-					t.Error("Deployment CreatedAt should not be zero")
-				}
-				if deployment.Age <= 0 {
-					t.Error("Deployment Age should be positive")
-				}
-				if len(deployment.Images) == 0 {
-					t.Error("Deployment should have at least one image")
-				}
-			}
+			validateListDeploymentResults(t, deployments, err, tt)
 		})
+	}
+}
+
+// listDeploymentTestCase represents a test case for ListDeployments.
+type listDeploymentTestCase struct {
+	name          string
+	deployments   []runtime.Object
+	options       ListDeploymentsOptions
+	expectedCount int
+	expectedNames []string
+	expectedError bool
+	errorOnList   bool
+}
+
+// createListDeploymentTests creates test cases for ListDeployments.
+func createListDeploymentTests() []listDeploymentTestCase {
+	return []listDeploymentTestCase{
+		createAllNamespacesTestCase(),
+		createSpecificNamespaceTestCase(),
+		createEmptyNamespaceTestCase(),
+		createNoDeploymentsTestCase(),
+		createAPIErrorTestCase(),
+	}
+}
+
+// createAllNamespacesTestCase creates a test case for listing from all namespaces.
+func createAllNamespacesTestCase() listDeploymentTestCase {
+	return listDeploymentTestCase{
+		name: "list deployments from all namespaces",
+		deployments: []runtime.Object{
+			createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
+			createTestDeployment("app2", testNamespaceKube, 1, []string{testImageBusybox}),
+			createTestDeployment("app3", testNamespaceDefault, 2, []string{testImageRedis, testImagePostgres}),
+		},
+		options: ListDeploymentsOptions{
+			Namespace: "",
+		},
+		expectedCount: 3,
+		expectedNames: []string{"app1", "app2", "app3"},
+		expectedError: false,
+	}
+}
+
+// createSpecificNamespaceTestCase creates a test case for listing from a specific namespace.
+func createSpecificNamespaceTestCase() listDeploymentTestCase {
+	return listDeploymentTestCase{
+		name: "list deployments from specific namespace",
+		deployments: []runtime.Object{
+			createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
+			createTestDeployment("app2", testNamespaceKube, 1, []string{testImageBusybox}),
+			createTestDeployment("app3", testNamespaceDefault, 2, []string{testImageRedis}),
+		},
+		options: ListDeploymentsOptions{
+			Namespace: testNamespaceDefault,
+		},
+		expectedCount: 2,
+		expectedNames: []string{"app1", "app3"},
+		expectedError: false,
+	}
+}
+
+// createEmptyNamespaceTestCase creates a test case for listing from an empty namespace.
+func createEmptyNamespaceTestCase() listDeploymentTestCase {
+	return listDeploymentTestCase{
+		name: "list deployments from empty namespace",
+		deployments: []runtime.Object{
+			createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
+		},
+		options: ListDeploymentsOptions{
+			Namespace: "empty-namespace",
+		},
+		expectedCount: 0,
+		expectedNames: []string{},
+		expectedError: false,
+	}
+}
+
+// createNoDeploymentsTestCase creates a test case for when no deployments exist.
+func createNoDeploymentsTestCase() listDeploymentTestCase {
+	return listDeploymentTestCase{
+		name:        "no deployments exist",
+		deployments: []runtime.Object{},
+		options: ListDeploymentsOptions{
+			Namespace: "",
+		},
+		expectedCount: 0,
+		expectedNames: []string{},
+		expectedError: false,
+	}
+}
+
+// createAPIErrorTestCase creates a test case for API errors.
+func createAPIErrorTestCase() listDeploymentTestCase {
+	return listDeploymentTestCase{
+		name: "API error on list",
+		deployments: []runtime.Object{
+			createTestDeployment("app1", testNamespaceDefault, 3, []string{testImageNginx}),
+		},
+		options: ListDeploymentsOptions{
+			Namespace: "",
+		},
+		expectedError: true,
+		errorOnList:   true,
+	}
+}
+
+// setupTestClient creates a test client with fake data and optional error simulation.
+func setupTestClient(logger zerolog.Logger, deployments []runtime.Object, simulateError bool) *Client {
+	fakeClientset := fake.NewSimpleClientset(deployments...)
+
+	if simulateError {
+		fakeClientset.PrependReactor("list", "deployments",
+			func(_ ktesting.Action) (handled bool, ret runtime.Object, err error) {
+				return true, nil, fmt.Errorf("simulated API error")
+			})
+	}
+
+	return &Client{
+		clientset: fakeClientset,
+		config:    &rest.Config{Host: fakeServerURL},
+		logger:    logger,
+	}
+}
+
+// validateListDeploymentResults validates the test results.
+func validateListDeploymentResults(t *testing.T, deployments []DeploymentInfo, err error, tt listDeploymentTestCase) {
+	t.Helper()
+
+	// Check error expectation
+	if tt.expectedError {
+		if err == nil {
+			t.Errorf("ListDeployments() expected error, got nil")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("ListDeployments() unexpected error: %v", err)
+		return
+	}
+
+	// Check deployment count
+	if len(deployments) != tt.expectedCount {
+		t.Errorf("ListDeployments() got %d deployments, want %d", len(deployments), tt.expectedCount)
+	}
+
+	// Check deployment names
+	actualNames := make([]string, len(deployments))
+	for i, deployment := range deployments {
+		actualNames[i] = deployment.Name
+	}
+
+	if !stringSlicesEqual(actualNames, tt.expectedNames) {
+		t.Errorf("ListDeployments() got names %v, want %v", actualNames, tt.expectedNames)
+	}
+
+	// Verify deployment info structure
+	validateDeploymentStructure(t, deployments)
+}
+
+// validateDeploymentStructure validates that deployment info has required fields.
+func validateDeploymentStructure(t *testing.T, deployments []DeploymentInfo) {
+	t.Helper()
+
+	for _, deployment := range deployments {
+		if deployment.Name == "" {
+			t.Error("Deployment name should not be empty")
+		}
+		if deployment.Namespace == "" {
+			t.Error("Deployment namespace should not be empty")
+		}
+		if deployment.CreatedAt.IsZero() {
+			t.Error("Deployment CreatedAt should not be zero")
+		}
+		if deployment.Age <= 0 {
+			t.Error("Deployment Age should be positive")
+		}
+		if len(deployment.Images) == 0 {
+			t.Error("Deployment should have at least one image")
+		}
 	}
 }
 
 // TestExtractImages tests the extractImages function with various container configurations.
 func TestExtractImages(t *testing.T) {
-	tests := []struct {
-		name           string
-		deployment     *appsv1.Deployment
-		expectedImages []string
-	}{
-		{
-			name: "single container with one image",
-			deployment: &appsv1.Deployment{
-				Spec: appsv1.DeploymentSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{Name: "web", Image: testImageNginx},
-							},
-						},
-					},
-				},
-			},
-			expectedImages: []string{testImageNginx},
-		},
-		{
-			name: "multiple containers with different images",
-			deployment: &appsv1.Deployment{
-				Spec: appsv1.DeploymentSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{Name: "web", Image: testImageNginx},
-								{Name: "db", Image: testImagePostgres},
-								{Name: "cache", Image: testImageRedis},
-							},
-						},
-					},
-				},
-			},
-			expectedImages: []string{testImageNginx, testImagePostgres, testImageRedis},
-		},
-		{
-			name: "containers with duplicate images",
-			deployment: &appsv1.Deployment{
-				Spec: appsv1.DeploymentSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{Name: "web1", Image: testImageNginx},
-								{Name: "web2", Image: testImageNginx},
-								{Name: "db", Image: testImagePostgres},
-							},
-						},
-					},
-				},
-			},
-			expectedImages: []string{testImageNginx, testImagePostgres},
-		},
-		{
-			name: "init containers and regular containers",
-			deployment: &appsv1.Deployment{
-				Spec: appsv1.DeploymentSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							InitContainers: []corev1.Container{
-								{Name: "init", Image: testImageBusybox},
-							},
-							Containers: []corev1.Container{
-								{Name: "app", Image: testImageNginx},
-							},
-						},
-					},
-				},
-			},
-			expectedImages: []string{testImageNginx, testImageBusybox},
-		},
-		{
-			name: "empty image names should be ignored",
-			deployment: &appsv1.Deployment{
-				Spec: appsv1.DeploymentSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{Name: "valid", Image: testImageNginx},
-								{Name: "empty", Image: ""},
-							},
-						},
-					},
-				},
-			},
-			expectedImages: []string{testImageNginx},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			images := extractImages(tt.deployment)
-
-			if len(images) != len(tt.expectedImages) {
-				t.Errorf("extractImages() got %d images, want %d", len(images), len(tt.expectedImages))
-			}
-
-			// Check that all expected images are present
-			for _, expectedImage := range tt.expectedImages {
-				found := false
-				for _, actualImage := range images {
-					if actualImage == expectedImage {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("extractImages() missing expected image: %s", expectedImage)
-				}
-			}
-
-			// Check for unexpected images
-			for _, actualImage := range images {
-				found := false
-				for _, expectedImage := range tt.expectedImages {
-					if actualImage == expectedImage {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("extractImages() found unexpected image: %s", actualImage)
-				}
-			}
+	t.Run("single container with one image", func(t *testing.T) {
+		deployment := createDeploymentWithContainers([]corev1.Container{
+			{Name: "web", Image: testImageNginx},
 		})
+		expectedImages := []string{testImageNginx}
+		assertExtractedImages(t, deployment, expectedImages)
+	})
+
+	t.Run("multiple containers with different images", func(t *testing.T) {
+		deployment := createDeploymentWithContainers([]corev1.Container{
+			{Name: "web", Image: testImageNginx},
+			{Name: "db", Image: testImagePostgres},
+			{Name: "cache", Image: testImageRedis},
+		})
+		expectedImages := []string{testImageNginx, testImagePostgres, testImageRedis}
+		assertExtractedImages(t, deployment, expectedImages)
+	})
+
+	t.Run("containers with duplicate images", func(t *testing.T) {
+		deployment := createDeploymentWithContainers([]corev1.Container{
+			{Name: "web1", Image: testImageNginx},
+			{Name: "web2", Image: testImageNginx},
+			{Name: "db", Image: testImagePostgres},
+		})
+		expectedImages := []string{testImageNginx, testImagePostgres}
+		assertExtractedImages(t, deployment, expectedImages)
+	})
+
+	t.Run("init containers and regular containers", func(t *testing.T) {
+		deployment := createDeploymentWithInitContainers(
+			[]corev1.Container{{Name: "init", Image: testImageBusybox}},
+			[]corev1.Container{{Name: "app", Image: testImageNginx}},
+		)
+		expectedImages := []string{testImageNginx, testImageBusybox}
+		assertExtractedImages(t, deployment, expectedImages)
+	})
+
+	t.Run("empty image names should be ignored", func(t *testing.T) {
+		deployment := createDeploymentWithContainers([]corev1.Container{
+			{Name: "valid", Image: testImageNginx},
+			{Name: "empty", Image: ""},
+		})
+		expectedImages := []string{testImageNginx}
+		assertExtractedImages(t, deployment, expectedImages)
+	})
+}
+
+// createDeploymentWithContainers creates a deployment with the specified containers.
+func createDeploymentWithContainers(containers []corev1.Container) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		Spec: appsv1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: containers,
+				},
+			},
+		},
 	}
+}
+
+// createDeploymentWithInitContainers creates a deployment with init containers and regular containers.
+func createDeploymentWithInitContainers(initContainers, containers []corev1.Container) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		Spec: appsv1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					InitContainers: initContainers,
+					Containers:     containers,
+				},
+			},
+		},
+	}
+}
+
+// assertExtractedImages validates that extracted images match expected images.
+func assertExtractedImages(t *testing.T, deployment *appsv1.Deployment, expectedImages []string) {
+	t.Helper()
+	images := extractImages(deployment)
+
+	if len(images) != len(expectedImages) {
+		t.Errorf("extractImages() got %d images, want %d", len(images), len(expectedImages))
+	}
+
+	assertAllExpectedImagesPresent(t, images, expectedImages)
+	assertNoUnexpectedImages(t, images, expectedImages)
+}
+
+// assertAllExpectedImagesPresent checks that all expected images are present in the result.
+func assertAllExpectedImagesPresent(t *testing.T, actualImages, expectedImages []string) {
+	t.Helper()
+	for _, expectedImage := range expectedImages {
+		if !containsImage(actualImages, expectedImage) {
+			t.Errorf("extractImages() missing expected image: %s", expectedImage)
+		}
+	}
+}
+
+// assertNoUnexpectedImages checks that no unexpected images are present in the result.
+func assertNoUnexpectedImages(t *testing.T, actualImages, expectedImages []string) {
+	t.Helper()
+	for _, actualImage := range actualImages {
+		if !containsImage(expectedImages, actualImage) {
+			t.Errorf("extractImages() found unexpected image: %s", actualImage)
+		}
+	}
+}
+
+// containsImage checks if a slice contains a specific image.
+func containsImage(images []string, target string) bool {
+	for _, image := range images {
+		if image == target {
+			return true
+		}
+	}
+	return false
 }
 
 // stringSlicesEqual checks if two string slices contain the same elements (order independent).

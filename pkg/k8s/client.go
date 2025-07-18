@@ -11,6 +11,7 @@ import (
 
 	"github.com/rs/zerolog"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -196,55 +197,12 @@ func (c *Client) ListDeployments(ctx context.Context, opts ListDeploymentsOption
 		Str("label_selector", opts.LabelSelector).
 		Msg("Listing deployments")
 
-	// Prepare list options
-	listOpts := metav1.ListOptions{
-		LabelSelector: opts.LabelSelector,
-		FieldSelector: opts.FieldSelector,
-	}
-
-	// Determine which namespace(s) to query
-	var deploymentList *appsv1.DeploymentList
-	var err error
-
-	if opts.Namespace == "" {
-		// List from all namespaces
-		c.logger.Debug().Msg("Listing deployments from all namespaces")
-		deploymentList, err = c.clientset.AppsV1().Deployments("").List(ctx, listOpts)
-	} else {
-		// List from specific namespace
-		c.logger.Debug().Str("namespace", opts.Namespace).Msg("Listing deployments from namespace")
-		deploymentList, err = c.clientset.AppsV1().Deployments(opts.Namespace).List(ctx, listOpts)
-	}
-
+	deploymentList, err := c.fetchDeploymentList(ctx, opts)
 	if err != nil {
-		c.logger.Error().Err(err).Msg("Failed to list deployments")
-		return nil, fmt.Errorf("failed to list deployments: %w", err)
+		return nil, err
 	}
 
-	// Convert to our DeploymentInfo struct
-	deployments := make([]DeploymentInfo, 0, len(deploymentList.Items))
-	now := time.Now()
-
-	for _, deployment := range deploymentList.Items {
-		info := DeploymentInfo{
-			Name:      deployment.Name,
-			Namespace: deployment.Namespace,
-			CreatedAt: deployment.CreationTimestamp.Time,
-			Age:       now.Sub(deployment.CreationTimestamp.Time),
-		}
-
-		// Extract replica information
-		if deployment.Spec.Replicas != nil {
-			info.Replicas.Desired = *deployment.Spec.Replicas
-		}
-		info.Replicas.Available = deployment.Status.AvailableReplicas
-		info.Replicas.Ready = deployment.Status.ReadyReplicas
-
-		// Extract container images
-		info.Images = extractImages(&deployment)
-
-		deployments = append(deployments, info)
-	}
+	deployments := c.convertToDeploymentInfo(deploymentList.Items)
 
 	c.logger.Info().
 		Int("count", len(deployments)).
@@ -254,31 +212,91 @@ func (c *Client) ListDeployments(ctx context.Context, opts ListDeploymentsOption
 	return deployments, nil
 }
 
+// fetchDeploymentList retrieves the raw deployment list from Kubernetes API.
+func (c *Client) fetchDeploymentList(ctx context.Context, opts ListDeploymentsOptions) (*appsv1.DeploymentList, error) {
+	listOpts := metav1.ListOptions{
+		LabelSelector: opts.LabelSelector,
+		FieldSelector: opts.FieldSelector,
+	}
+
+	var deploymentList *appsv1.DeploymentList
+	var err error
+
+	if opts.Namespace == "" {
+		c.logger.Debug().Msg("Listing deployments from all namespaces")
+		deploymentList, err = c.clientset.AppsV1().Deployments("").List(ctx, listOpts)
+	} else {
+		c.logger.Debug().Str("namespace", opts.Namespace).Msg("Listing deployments from namespace")
+		deploymentList, err = c.clientset.AppsV1().Deployments(opts.Namespace).List(ctx, listOpts)
+	}
+
+	if err != nil {
+		c.logger.Error().Err(err).Msg("Failed to list deployments")
+		return nil, fmt.Errorf("failed to list deployments: %w", err)
+	}
+
+	return deploymentList, nil
+}
+
+// convertToDeploymentInfo converts Kubernetes deployment objects to DeploymentInfo structs.
+func (c *Client) convertToDeploymentInfo(deployments []appsv1.Deployment) []DeploymentInfo {
+	result := make([]DeploymentInfo, 0, len(deployments))
+	now := time.Now()
+
+	for _, deployment := range deployments {
+		info := c.createDeploymentInfo(deployment, now)
+		result = append(result, info)
+	}
+
+	return result
+}
+
+// createDeploymentInfo creates a DeploymentInfo struct from a Kubernetes deployment.
+func (c *Client) createDeploymentInfo(deployment appsv1.Deployment, now time.Time) DeploymentInfo {
+	info := DeploymentInfo{
+		Name:      deployment.Name,
+		Namespace: deployment.Namespace,
+		CreatedAt: deployment.CreationTimestamp.Time,
+		Age:       now.Sub(deployment.CreationTimestamp.Time),
+		Images:    extractImages(&deployment),
+	}
+
+	// Extract replica information
+	if deployment.Spec.Replicas != nil {
+		info.Replicas.Desired = *deployment.Spec.Replicas
+	}
+	info.Replicas.Available = deployment.Status.AvailableReplicas
+	info.Replicas.Ready = deployment.Status.ReadyReplicas
+
+	return info
+}
+
 // extractImages extracts all unique container images from a deployment.
 // It processes both init containers and regular containers.
 func extractImages(deployment *appsv1.Deployment) []string {
 	imageSet := make(map[string]struct{})
 
-	// Process containers
-	for _, container := range deployment.Spec.Template.Spec.Containers {
+	collectContainerImages(deployment.Spec.Template.Spec.Containers, imageSet)
+	collectContainerImages(deployment.Spec.Template.Spec.InitContainers, imageSet)
+
+	return convertImageSetToSlice(imageSet)
+}
+
+// collectContainerImages adds container images to the image set.
+func collectContainerImages(containers []corev1.Container, imageSet map[string]struct{}) {
+	for _, container := range containers {
 		if container.Image != "" {
 			imageSet[container.Image] = struct{}{}
 		}
 	}
+}
 
-	// Process init containers
-	for _, container := range deployment.Spec.Template.Spec.InitContainers {
-		if container.Image != "" {
-			imageSet[container.Image] = struct{}{}
-		}
-	}
-
-	// Convert map to slice
+// convertImageSetToSlice converts a map of images to a slice.
+func convertImageSetToSlice(imageSet map[string]struct{}) []string {
 	images := make([]string, 0, len(imageSet))
 	for image := range imageSet {
 		images = append(images, image)
 	}
-
 	return images
 }
 

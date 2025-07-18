@@ -85,62 +85,90 @@ Examples:
 // runListDeployments executes the deployment listing logic.
 // It creates a Kubernetes client, fetches deployments, and formats the output.
 func runListDeployments() error {
-	// Validate output format first
+	// Validate input parameters
+	if err := validateListParameters(); err != nil {
+		return err
+	}
+
+	// Create Kubernetes client
+	client, err := createK8sClient()
+	if err != nil {
+		return err
+	}
+	defer closeClient(client)
+
+	// Fetch deployments
+	deployments, err := fetchDeployments(client)
+	if err != nil {
+		return err
+	}
+
+	// Format and display output
+	return formatDeploymentOutput(deployments, outputFormat)
+}
+
+// validateListParameters validates the input parameters for list command.
+func validateListParameters() error {
 	if err := validateOutputFormat(outputFormat); err != nil {
 		return fmt.Errorf("invalid output format: %w", err)
 	}
 
-	// Validate namespace
 	if err := validateNamespace(namespace); err != nil {
 		return fmt.Errorf("invalid namespace: %w", err)
 	}
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-	defer cancel()
+	return nil
+}
 
-	// Configure Kubernetes client
+// createK8sClient creates and returns a Kubernetes client.
+func createK8sClient() (*k8s.Client, error) {
 	clientConfig := k8s.ClientConfig{
 		KubeconfigPath: kubeconfigPath,
 		Context:        contextName,
 	}
 
-	// Create Kubernetes client
-	client, err := k8s.CreateClient(clientConfig, log.Logger)
-	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes client: %w", err)
-	}
-	defer func() {
-		if closeErr := client.Close(); closeErr != nil {
-			log.Warn().Err(closeErr).Msg("Failed to close Kubernetes client")
-		}
-	}()
+	return k8s.CreateClient(clientConfig, log.Logger)
+}
 
-	// Prepare list options
+// closeClient safely closes the Kubernetes client.
+func closeClient(client *k8s.Client) {
+	if closeErr := client.Close(); closeErr != nil {
+		log.Warn().Err(closeErr).Msg("Failed to close Kubernetes client")
+	}
+}
+
+// fetchDeployments retrieves deployments from the Kubernetes cluster.
+func fetchDeployments(client *k8s.Client) ([]k8s.DeploymentInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
 	listOptions := k8s.ListDeploymentsOptions{
 		Namespace:     namespace,
 		LabelSelector: labelSelector,
 	}
 
-	// List deployments
 	deployments, err := client.ListDeployments(ctx, listOptions)
 	if err != nil {
-		// Provide helpful error context
-		if strings.Contains(err.Error(), "connection refused") {
-			return fmt.Errorf("failed to connect to Kubernetes API server - "+
-				"is the cluster running and accessible? %w", err)
-		}
-		if strings.Contains(err.Error(), "forbidden") {
-			return fmt.Errorf("insufficient permissions to list deployments - check your RBAC configuration: %w", err)
-		}
-		if strings.Contains(err.Error(), "not found") && namespace != "" {
-			return fmt.Errorf("namespace '%s' not found: %w", namespace, err)
-		}
-		return fmt.Errorf("failed to list deployments: %w", err)
+		return nil, enhanceK8sError(err)
 	}
 
-	// Format and display output
-	return formatDeploymentOutput(deployments, outputFormat)
+	return deployments, nil
+}
+
+// enhanceK8sError provides better error messages for common Kubernetes errors.
+func enhanceK8sError(err error) error {
+	if strings.Contains(err.Error(), "connection refused") {
+		return fmt.Errorf("failed to connect to Kubernetes API server - "+
+			"is the cluster running and accessible? %w", err)
+	}
+	if strings.Contains(err.Error(), "forbidden") {
+		return fmt.Errorf("insufficient permissions to list deployments - "+
+			"check your RBAC configuration: %w", err)
+	}
+	if strings.Contains(err.Error(), "not found") && namespace != "" {
+		return fmt.Errorf("namespace '%s' not found: %w", namespace, err)
+	}
+	return fmt.Errorf("failed to list deployments: %w", err)
 }
 
 // formatDeploymentOutput formats and displays deployments in the specified format.
@@ -182,58 +210,84 @@ func formatDeploymentTable(deployments []k8s.DeploymentInfo) error {
 		return nil
 	}
 
-	// Create tabwriter for aligned output
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer func() {
-		if err := w.Flush(); err != nil {
-			log.Warn().Err(err).Msg("Failed to flush table writer")
-		}
-	}()
+	w := createTableWriter()
+	defer flushTableWriter(w)
 
-	// Print header
-	var err error
-	if namespace == "" {
-		// Show namespace column when listing from all namespaces
-		_, err = fmt.Fprintln(w, "NAMESPACE\tNAME\tREADY\tUP-TO-DATE\tAVAILABLE\tAGE\tIMAGES")
-	} else {
-		// Hide namespace column when listing from specific namespace
-		_, err = fmt.Fprintln(w, "NAME\tREADY\tUP-TO-DATE\tAVAILABLE\tAGE\tIMAGES")
+	if err := writeTableHeader(w); err != nil {
+		return err
 	}
-	if err != nil {
+
+	return writeDeploymentRows(w, deployments)
+}
+
+// createTableWriter creates a new tabwriter for aligned output.
+func createTableWriter() *tabwriter.Writer {
+	return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+}
+
+// flushTableWriter safely flushes the table writer.
+func flushTableWriter(w *tabwriter.Writer) {
+	if err := w.Flush(); err != nil {
+		log.Warn().Err(err).Msg("Failed to flush table writer")
+	}
+}
+
+// writeTableHeader writes the appropriate table header based on namespace scope.
+func writeTableHeader(w *tabwriter.Writer) error {
+	var header string
+	if namespace == "" {
+		header = "NAMESPACE\tNAME\tREADY\tUP-TO-DATE\tAVAILABLE\tAGE\tIMAGES"
+	} else {
+		header = "NAME\tREADY\tUP-TO-DATE\tAVAILABLE\tAGE\tIMAGES"
+	}
+
+	if _, err := fmt.Fprintln(w, header); err != nil {
 		return fmt.Errorf("failed to write table header: %w", err)
 	}
+	return nil
+}
 
-	// Print deployments
+// writeDeploymentRows writes all deployment rows to the table.
+func writeDeploymentRows(w *tabwriter.Writer, deployments []k8s.DeploymentInfo) error {
 	for _, deployment := range deployments {
-		readyStatus := fmt.Sprintf("%d/%d", deployment.Replicas.Ready, deployment.Replicas.Desired)
-		ageString := formatAge(deployment.Age)
-		imagesString := formatImages(deployment.Images)
-
-		if namespace == "" {
-			_, err = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
-				deployment.Namespace,
-				deployment.Name,
-				readyStatus,
-				deployment.Replicas.Ready, // UP-TO-DATE approximation
-				deployment.Replicas.Available,
-				ageString,
-				imagesString,
-			)
-		} else {
-			_, err = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\t%s\n",
-				deployment.Name,
-				readyStatus,
-				deployment.Replicas.Ready, // UP-TO-DATE approximation
-				deployment.Replicas.Available,
-				ageString,
-				imagesString,
-			)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to write deployment row: %w", err)
+		if err := writeDeploymentRow(w, deployment); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
+// writeDeploymentRow writes a single deployment row to the table.
+func writeDeploymentRow(w *tabwriter.Writer, deployment k8s.DeploymentInfo) error {
+	readyStatus := fmt.Sprintf("%d/%d", deployment.Replicas.Ready, deployment.Replicas.Desired)
+	ageString := formatAge(deployment.Age)
+	imagesString := formatImages(deployment.Images)
+
+	var err error
+	if namespace == "" {
+		_, err = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
+			deployment.Namespace,
+			deployment.Name,
+			readyStatus,
+			deployment.Replicas.Ready,
+			deployment.Replicas.Available,
+			ageString,
+			imagesString,
+		)
+	} else {
+		_, err = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\t%s\n",
+			deployment.Name,
+			readyStatus,
+			deployment.Replicas.Ready,
+			deployment.Replicas.Available,
+			ageString,
+			imagesString,
+		)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to write deployment row: %w", err)
+	}
 	return nil
 }
 
@@ -309,23 +363,53 @@ func validateNamespace(ns string) error {
 		return nil // Empty namespace means "all namespaces"
 	}
 
-	// Basic namespace name validation
-	// Kubernetes names must be lowercase alphanumeric with hyphens
+	if err := validateNamespaceLength(ns); err != nil {
+		return err
+	}
+
+	return validateNamespaceCharacters(ns)
+}
+
+// validateNamespaceLength checks if the namespace name length is within limits.
+func validateNamespaceLength(ns string) error {
 	if len(ns) > 63 {
 		return fmt.Errorf("namespace name too long (max 63 characters)")
 	}
+	return nil
+}
 
-	// Basic DNS label validation
+// validateNamespaceCharacters validates namespace characters and placement rules.
+func validateNamespaceCharacters(ns string) error {
 	for i, r := range ns {
-		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
-			return fmt.Errorf("namespace name contains invalid character '%c' "+
-				"(must be lowercase alphanumeric with hyphens)", r)
+		if err := validateCharacter(r); err != nil {
+			return err
 		}
-		if (i == 0 || i == len(ns)-1) && r == '-' {
-			return fmt.Errorf("namespace name cannot start or end with hyphen")
+		if err := validateHyphenPlacement(r, i, len(ns)); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
+// validateCharacter checks if a character is valid for namespace names.
+func validateCharacter(r rune) error {
+	if isValidNamespaceChar(r) {
+		return nil
+	}
+	return fmt.Errorf("namespace name contains invalid character '%c' "+
+		"(must be lowercase alphanumeric with hyphens)", r)
+}
+
+// isValidNamespaceChar checks if a character is valid for namespace names.
+func isValidNamespaceChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-'
+}
+
+// validateHyphenPlacement checks hyphen placement rules.
+func validateHyphenPlacement(r rune, pos, length int) error {
+	if r == '-' && (pos == 0 || pos == length-1) {
+		return fmt.Errorf("namespace name cannot start or end with hyphen")
+	}
 	return nil
 }
 
