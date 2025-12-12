@@ -10,8 +10,8 @@ tmp
 # Add VSCode Workspace
 !.vscode/K8sController.code-workspace
 
-# Ignore Codacy CLI
+# AI Specific
 .codacy
-
-# Ignore cursor AI rules
 .cursor/rules/codacy.mdc
+.mcp.json
+.env
