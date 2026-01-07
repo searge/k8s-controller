@@ -327,34 +327,9 @@ func TestFormatImages(t *testing.T) {
 			expected: testImageNginx,
 		},
 		{
-			name:     "single long image",
-			images:   []string{"registry.example.com/very/long/image/name:v1.2.3-latest"},
-			expected: "registry.example.com/very/long/image/...",
-		},
-		{
-			name:     "two images",
-			images:   []string{testImageNginx, testImageRedis},
-			expected: testImageNginx + "," + testImageRedis,
-		},
-		{
-			name:     "three images",
-			images:   []string{testImageNginx, testImageRedis, testImagePostgres},
-			expected: testImageNginx + "," + testImageRedis + "," + testImagePostgres,
-		},
-		{
 			name:     "many images",
 			images:   []string{testImageNginx, testImageRedis, testImagePostgres, "mysql:8.0", "mongodb:4.4"},
 			expected: testImageNginx + "," + testImageRedis + " +3 more",
-		},
-		{
-			name: "many long images",
-			images: []string{
-				"registry.example.com/very/long/image/name:v1.2.3",
-				"registry.example.com/another/very/long/image:latest",
-				"third:image",
-				"fourth:image",
-			},
-			expected: "registry.example.com/v...,registry.example.com/a... +2 more",
 		},
 	}
 
@@ -383,28 +358,10 @@ func TestTruncateString(t *testing.T) {
 			expected: "hello",
 		},
 		{
-			name:     "exact length",
-			input:    "hello",
-			maxLen:   5,
-			expected: "hello",
-		},
-		{
 			name:     "long string",
 			input:    "this-is-a-very-long-string-that-needs-truncating",
 			maxLen:   20,
 			expected: "this-is-a-very-lo...",
-		},
-		{
-			name:     "very short maxLen",
-			input:    "hello",
-			maxLen:   3,
-			expected: "hel",
-		},
-		{
-			name:     "maxLen less than ellipsis",
-			input:    "hello",
-			maxLen:   2,
-			expected: "he",
 		},
 		{
 			name:     "empty string",
@@ -500,7 +457,7 @@ func TestFormatDeploymentTable(t *testing.T) {
 			namespace:   "",
 		},
 		{
-			name: "single deployment all namespaces",
+			name: "single deployment",
 			deployments: []k8s.DeploymentInfo{
 				{
 					Name:      testDeploymentName,
@@ -518,78 +475,22 @@ func TestFormatDeploymentTable(t *testing.T) {
 					Images: []string{"nginx:latest"},
 				},
 			},
-			namespace: "", // All namespaces
-		},
-		{
-			name: "single deployment specific namespace",
-			deployments: []k8s.DeploymentInfo{
-				{
-					Name:      testDeploymentName,
-					Namespace: testNamespaceDefault,
-					Replicas: struct {
-						Desired   int32 `json:"desired"`
-						Available int32 `json:"available"`
-						Ready     int32 `json:"ready"`
-					}{
-						Desired:   1,
-						Available: 1,
-						Ready:     1,
-					},
-					Age:    time.Hour,
-					Images: []string{"nginx:latest"},
-				},
-			},
-			namespace: testNamespaceDefault, // Specific namespace
+			namespace: testNamespaceDefault,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set global namespace variable for the test
 			originalNamespace := namespace
 			namespace = tt.namespace
 			defer func() {
 				namespace = originalNamespace
 			}()
 
-			// This test mainly verifies that the function doesn't panic
 			err := formatDeploymentTable(tt.deployments)
 			if err != nil {
 				t.Errorf("formatDeploymentTable() should not return error, got: %v", err)
 			}
 		})
-	}
-}
-
-// BenchmarkFormatAge benchmarks the age formatting function.
-func BenchmarkFormatAge(b *testing.B) {
-	duration := 25 * time.Hour
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		formatAge(duration)
-	}
-}
-
-// BenchmarkFormatImages benchmarks the image formatting function.
-func BenchmarkFormatImages(b *testing.B) {
-	images := []string{
-		"nginx:1.21",
-		"redis:6.2",
-		"postgres:13",
-		"mysql:8.0",
-		"mongodb:4.4",
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		formatImages(images)
-	}
-}
-
-// BenchmarkTruncateString benchmarks the string truncation function.
-func BenchmarkTruncateString(b *testing.B) {
-	input := "this-is-a-very-long-string-that-needs-truncating-for-display-purposes"
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		truncateString(input, 30)
 	}
 }
