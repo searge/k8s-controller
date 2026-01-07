@@ -1,0 +1,5 @@
+{
+    "sonarCloudOrganization": "searge",
+    "projectKey": "Searge_k8s-controller",
+    "region": "EU"
+}
