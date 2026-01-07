@@ -5,8 +5,6 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -16,7 +14,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 )
 
 // Client wraps the Kubernetes clientset with additional functionality.
@@ -80,22 +77,18 @@ func LoadKubeconfig(config ClientConfig, logger zerolog.Logger) (*rest.Config, e
 		return inClusterConfig, nil
 	}
 
-	// Determine kubeconfig path
-	kubeconfigPath := config.KubeconfigPath
-	if kubeconfigPath == "" {
-		kubeconfigPath = getDefaultKubeconfigPath()
-	}
-
-	logger.Debug().Str("path", kubeconfigPath).Msg("Loading kubeconfig from file")
-
-	// Check if kubeconfig file exists
-	if _, err := os.Stat(kubeconfigPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("kubeconfig file not found at %s", kubeconfigPath)
-	}
-
-	// Load config from kubeconfig file
+	// Use client-go's built-in loading rules
+	// This automatically handles:
+	// - KUBECONFIG env variable (with : separator for multiple files)
+	// - ~/.kube/config fallback
+	// - Merging multiple configs (kubectl behavior)
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	loadingRules.ExplicitPath = kubeconfigPath
+
+	// Only override if explicit --kubeconfig flag provided
+	if config.KubeconfigPath != "" {
+		loadingRules.ExplicitPath = config.KubeconfigPath
+		logger.Debug().Str("path", config.KubeconfigPath).Msg("Using explicit kubeconfig path")
+	}
 
 	configOverrides := &clientcmd.ConfigOverrides{}
 	if config.Context != "" {
@@ -318,21 +311,4 @@ func (c *Client) GetConfig() *rest.Config {
 func (c *Client) Close() error {
 	c.logger.Debug().Msg("Closing Kubernetes client")
 	return nil
-}
-
-// getDefaultKubeconfigPath returns the default kubeconfig file path.
-// It follows the standard kubectl conventions.
-func getDefaultKubeconfigPath() string {
-	// Check KUBECONFIG environment variable first
-	if kubeconfig := os.Getenv("KUBECONFIG"); kubeconfig != "" {
-		return kubeconfig
-	}
-
-	// Use default location in home directory
-	if home := homedir.HomeDir(); home != "" {
-		return filepath.Join(home, ".kube", "config")
-	}
-
-	// Fallback to current directory (unlikely to work, but better than empty)
-	return "./kubeconfig"
 }

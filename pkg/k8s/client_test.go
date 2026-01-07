@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,64 +33,6 @@ const (
 	testMsgFailedClose   = "Failed to close client"
 )
 
-// TestGetDefaultKubeconfigPath tests the default kubeconfig path resolution.
-func TestGetDefaultKubeconfigPath(t *testing.T) {
-	// Save original environment
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	originalHome := os.Getenv("HOME")
-	defer func() {
-		if err := os.Setenv("KUBECONFIG", originalKubeconfig); err != nil {
-			t.Errorf("Failed to restore KUBECONFIG: %v", err)
-		}
-		if err := os.Setenv("HOME", originalHome); err != nil {
-			t.Errorf("Failed to restore HOME: %v", err)
-		}
-	}()
-
-	tests := []struct {
-		name          string
-		kubeconfigEnv string
-		homeEnv       string
-		expected      string
-	}{
-		{
-			name:          "KUBECONFIG environment variable set",
-			kubeconfigEnv: "/custom/kubeconfig",
-			homeEnv:       "/home/user",
-			expected:      "/custom/kubeconfig",
-		},
-		{
-			name:          "HOME environment variable set",
-			kubeconfigEnv: "",
-			homeEnv:       "/home/user",
-			expected:      "/home/user/.kube/config",
-		},
-		{
-			name:          "no environment variables",
-			kubeconfigEnv: "",
-			homeEnv:       "",
-			expected:      "./kubeconfig",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variables
-			if err := os.Setenv("KUBECONFIG", tt.kubeconfigEnv); err != nil {
-				t.Fatalf("Failed to set KUBECONFIG: %v", err)
-			}
-			if err := os.Setenv("HOME", tt.homeEnv); err != nil {
-				t.Fatalf("Failed to set HOME: %v", err)
-			}
-
-			result := getDefaultKubeconfigPath()
-			if result != tt.expected {
-				t.Errorf("getDefaultKubeconfigPath() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 // TestLoadKubeconfigFileNotFound tests error handling when kubeconfig file doesn't exist.
 func TestLoadKubeconfigFileNotFound(t *testing.T) {
 	logger := zerolog.New(os.Stderr)
@@ -103,9 +46,9 @@ func TestLoadKubeconfigFileNotFound(t *testing.T) {
 		t.Error("LoadKubeconfig() should return error for nonexistent file")
 	}
 
-	expectedError := "kubeconfig file not found at /nonexistent/path/config"
-	if err.Error() != expectedError {
-		t.Errorf("LoadKubeconfig() error = %v, want %v", err.Error(), expectedError)
+	// Error message comes from client-go, just verify it's wrapped properly
+	if !strings.Contains(err.Error(), "failed to load kubeconfig") {
+		t.Errorf("LoadKubeconfig() error = %v, should contain 'failed to load kubeconfig'", err.Error())
 	}
 }
 

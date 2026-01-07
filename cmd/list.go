@@ -13,6 +13,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/Searge/k8s-controller/pkg/k8s"
 )
@@ -176,6 +177,8 @@ func formatDeploymentOutput(deployments []k8s.DeploymentInfo, format string) err
 	switch format {
 	case "json":
 		return formatDeploymentJSON(deployments)
+	case "yaml":
+		return formatDeploymentYAML(deployments)
 	case "table":
 		return formatDeploymentTable(deployments)
 	default:
@@ -201,6 +204,29 @@ func formatDeploymentJSON(deployments []k8s.DeploymentInfo) error {
 	}
 
 	return encoder.Encode(output)
+}
+
+// formatDeploymentYAML outputs deployments in YAML format.
+func formatDeploymentYAML(deployments []k8s.DeploymentInfo) error {
+	output := struct {
+		Kind       string               `yaml:"kind"`
+		APIVersion string               `yaml:"apiVersion"`
+		Items      []k8s.DeploymentInfo `yaml:"items"`
+		Count      int                  `yaml:"count"`
+	}{
+		Kind:       "DeploymentList",
+		APIVersion: "apps/v1",
+		Items:      deployments,
+		Count:      len(deployments),
+	}
+
+	data, err := yaml.Marshal(output)
+	if err != nil {
+		return fmt.Errorf("failed to marshal YAML: %w", err)
+	}
+
+	fmt.Print(string(data))
+	return nil
 }
 
 // formatDeploymentTable outputs deployments in table format.
@@ -349,10 +375,10 @@ func truncateString(s string, maxLen int) string {
 // validateOutputFormat ensures the output format is supported.
 func validateOutputFormat(format string) error {
 	switch format {
-	case "table", "json":
+	case "table", "json", "yaml":
 		return nil
 	default:
-		return fmt.Errorf("unsupported format '%s', must be one of: table, json", format)
+		return fmt.Errorf("unsupported format '%s', must be one of: table, json, yaml", format)
 	}
 }
 
@@ -425,7 +451,7 @@ func init() {
 		"Kubernetes namespace (default: all namespaces)")
 
 	listDeploymentsCmd.Flags().StringVarP(&outputFormat, "output", "o", "table",
-		"Output format (table|json)")
+		"Output format (table|json|yaml)")
 
 	listDeploymentsCmd.Flags().StringVarP(&labelSelector, "selector", "l", "",
 		"Label selector to filter deployments")

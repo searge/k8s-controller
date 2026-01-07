@@ -221,7 +221,7 @@ func TestValidateOutputFormat(t *testing.T) {
 	}{
 		{"valid table format", "table", false},
 		{"valid json format", "json", false},
-		{"invalid format", "yaml", true},
+		{"valid yaml format", "yaml", false},
 		{"invalid format xml", "xml", true},
 		{"empty format", "", true},
 		{"case sensitive", "Table", true}, // Should be lowercase
@@ -410,7 +410,8 @@ func TestFormatDeploymentOutput(t *testing.T) {
 	}{
 		{"table format", "table", false},
 		{"json format", "json", false},
-		{"invalid format", "yaml", true},
+		{"yaml format", "yaml", false},
+		{"invalid format", "xml", true},
 	}
 
 	for _, tt := range tests {
