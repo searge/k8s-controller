@@ -442,7 +442,14 @@ func TestFormatDeploymentJSON(t *testing.T) {
 		},
 	}
 
-	// Capture stdout to validate JSON structure
+	outputBytes := captureJSONOutput(t, testDeployments)
+	validateJSONOutput(t, outputBytes, len(testDeployments))
+}
+
+// captureJSONOutput captures the JSON output from formatDeploymentJSON.
+func captureJSONOutput(t *testing.T, deployments []k8s.DeploymentInfo) []byte {
+	t.Helper()
+
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("Failed to create pipe: %v", err)
@@ -450,10 +457,8 @@ func TestFormatDeploymentJSON(t *testing.T) {
 	oldStdout := os.Stdout
 	os.Stdout = w
 
-	// Execute the function
-	formatErr := formatDeploymentJSON(testDeployments)
+	formatErr := formatDeploymentJSON(deployments)
 
-	// Restore stdout and read captured output
 	w.Close()
 	os.Stdout = oldStdout
 
@@ -461,13 +466,18 @@ func TestFormatDeploymentJSON(t *testing.T) {
 		t.Errorf("formatDeploymentJSON() should not return error, got: %v", formatErr)
 	}
 
-	// Read and validate JSON output
 	outputBytes, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatalf("Failed to read captured output: %v", err)
 	}
 
-	// Validate JSON structure
+	return outputBytes
+}
+
+// validateJSONOutput validates the structure of JSON output.
+func validateJSONOutput(t *testing.T, outputBytes []byte, expectedCount int) {
+	t.Helper()
+
 	var output struct {
 		Kind       string               `json:"kind"`
 		APIVersion string               `json:"apiVersion"`
@@ -479,18 +489,17 @@ func TestFormatDeploymentJSON(t *testing.T) {
 		t.Errorf("Failed to parse JSON output: %v", err)
 	}
 
-	// Validate expected fields
 	if output.Kind != "DeploymentList" {
 		t.Errorf("Expected kind 'DeploymentList', got '%s'", output.Kind)
 	}
 	if output.APIVersion != "apps/v1" {
 		t.Errorf("Expected apiVersion 'apps/v1', got '%s'", output.APIVersion)
 	}
-	if output.Count != len(testDeployments) {
-		t.Errorf("Expected count %d, got %d", len(testDeployments), output.Count)
+	if output.Count != expectedCount {
+		t.Errorf("Expected count %d, got %d", expectedCount, output.Count)
 	}
-	if len(output.Items) != len(testDeployments) {
-		t.Errorf("Expected %d items, got %d", len(testDeployments), len(output.Items))
+	if len(output.Items) != expectedCount {
+		t.Errorf("Expected %d items, got %d", expectedCount, len(output.Items))
 	}
 }
 
