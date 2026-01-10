@@ -44,8 +44,9 @@ Check or stop services:
 
 - `iptables` must be installed and usable.
 - The pause image must be pulled with a platform hint:
-  `sudo ctr -n k8s.io images pull --platform linux/amd64 registry.k8s.io/pause:3.10`
+  `sudo ctr -n k8s.io images pull --platform linux/amd64 registry.k8s.io/pause:3.10` (use `linux/arm64` on ARM)
 - Codespaces/devcontainer should run with `--cgroupns=host` so cgroup v2 can be delegated.
+- Containerd should use local image pull to avoid platform unpack errors.
 
 ## Common paths
 

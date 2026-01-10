@@ -13,9 +13,10 @@ version = 3
 [plugins.'io.containerd.cri.v1.images']
   snapshotter = "native"
   disable_snapshot_annotations = true
+  use_local_image_pull = true
 
 [plugins.'io.containerd.cri.v1.runtime'.cni]
-  bin_dir = "/opt/cni/bin"
+  bin_dirs = ["/opt/cni/bin"]
   conf_dir = "/etc/cni/net.d"
 
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]

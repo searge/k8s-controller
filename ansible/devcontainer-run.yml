@@ -96,7 +96,7 @@
 
         - name: "Start | Pre-pull pause image for kubelet"
           ansible.builtin.shell: |
-            {{ bin_path }}/ctr -n k8s.io images pull --platform linux/amd64 registry.k8s.io/pause:3.10
+            {{ bin_path }}/ctr -n k8s.io images pull --platform linux/{{ arch }} registry.k8s.io/pause:3.10
           register: pause_pull
           changed_when: "'resolved' in pause_pull.stdout or 'done' in pause_pull.stdout or pause_pull.rc == 0"
 
