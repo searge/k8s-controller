@@ -92,8 +92,8 @@ task rm           # Remove the machine
   - [x] Development environment automation
   - [x] Documentation and examples
 
-- [ ] **Kubernetes Integration** (Next Steps)
-  - [ ] List Kubernetes Deployments with client-go
+- [ ] **Kubernetes Integration** (In Progress)
+  - [x] List Kubernetes Deployments with client-go
   - [ ] Deployment Informer with client-go
   - [ ] JSON API Endpoint for deployments
   - [ ] controller-runtime Deployment Controller
