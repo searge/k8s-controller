@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install ca-certificates and git for dependency downloads
 RUN apk add --no-cache ca-certificates git
