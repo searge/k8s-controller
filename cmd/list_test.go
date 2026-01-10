@@ -330,6 +330,16 @@ func TestFormatImages(t *testing.T) {
 			expected: testImageNginx,
 		},
 		{
+			name:     "two images",
+			images:   []string{testImageNginx, testImageRedis},
+			expected: testImageNginx + "," + testImageRedis,
+		},
+		{
+			name:     "three images",
+			images:   []string{testImageNginx, testImageRedis, testImagePostgres},
+			expected: testImageNginx + "," + testImageRedis + "," + testImagePostgres,
+		},
+		{
 			name:     "many images",
 			images:   []string{testImageNginx, testImageRedis, testImagePostgres, "mysql:8.0", "mongodb:4.4"},
 			expected: testImageNginx + "," + testImageRedis + " +3 more",
@@ -456,11 +466,12 @@ func captureJSONOutput(t *testing.T, deployments []k8s.DeploymentInfo) []byte {
 	}
 	oldStdout := os.Stdout
 	os.Stdout = w
+	defer func() {
+		os.Stdout = oldStdout
+	}()
 
 	formatErr := formatDeploymentJSON(deployments)
-
 	w.Close()
-	os.Stdout = oldStdout
 
 	if formatErr != nil {
 		t.Errorf("formatDeploymentJSON() should not return error, got: %v", formatErr)
