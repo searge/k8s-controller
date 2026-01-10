@@ -13,13 +13,6 @@ import (
 	"github.com/Searge/k8s-controller/pkg/k8s"
 )
 
-// Connection test configuration variables, set via CLI flags.
-var (
-	kubeconfigPath string
-	contextName    string
-	timeoutSeconds int
-)
-
 // connectionCmd represents the connection command.
 // It creates a Kubernetes client and verifies connectivity to the API server.
 var connectionCmd = &cobra.Command{

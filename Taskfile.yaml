@@ -98,6 +98,13 @@ tasks:
         golangci/golangci-lint:v2.1.6
         golangci-lint run {{.CLI_ARGS}}
 
+  markdownlint:
+    aliases:
+      - md
+    desc: "Run `markdownlint` on markdown files"
+    cmds:
+      - markdownlint '**/*.md' --ignore node_modules --ignore .git
+
   linters:
     desc: "Run all linters at once"
     cmds:
