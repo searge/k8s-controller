@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-01-10
+
+### 🚀 Features
+
+- *(k8s)* Add client-go integration with deployment listing
+- *(docs)* Init best practices
+- *(tasks)* Add markdownlint
+- *(conf)* Add SonarQube integration
+- *(k8s)* Fix KUBECONFIG multi-path handling and add YAML output
+
+### 🐛 Bug/Lint Fixes
+
+- *(docs)* Update to more strict rules
+- *(k8s)* Add Updated field and fix test constants
+- Address CodeRabbit review issues
+- *(test)* Add defer cleanup and improve test coverage
+
+### 🚜 Refactor
+
+- *(tests)* Extract string literals to constants
+- *(tests)* Replace string literals with constants in client_test.go
+- Reduce function complexity to meet Codacy requirements
+- *(tests)* Simplify test files for tutorial project
+- *(test)* Reduce cyclomatic complexity in TestFormatDeploymentJSON
+
+### ⚙️ Miscellaneous Tasks
+
+- Add AI specific rules
+- *(ai)* Add claude folder
+- *(docs)* Mark list deployments feature as completed
+
+### Deps
+
+- *(deps)* Bump k8s.io/client-go from 0.33.2 to 0.33.3 (#9)
+- *(deps)* Bump github.com/valyala/fasthttp in the updates group (#8)
+- *(deps)* Bump github.com/valyala/fasthttp in the updates group (#10)
+- *(deps)* Bump k8s.io/client-go from 0.33.3 to 0.33.4 (#11)
+- *(deps)* Bump the updates group with 3 updates (#13)
+- *(deps)* Bump github.com/valyala/fasthttp in the updates group (#14)
+- *(deps)* Bump k8s.io/client-go from 0.34.0 to 0.34.1 (#15)
+- *(deps)* Bump the updates group across 1 directory with 3 updates (#18)
+
 ## [0.5.0] - 2025-07-07
 
 ### 🚀 Features
