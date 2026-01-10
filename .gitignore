@@ -15,3 +15,4 @@ tmp
 .cursor/rules/codacy.mdc
 .mcp.json
 .env
+.claude
