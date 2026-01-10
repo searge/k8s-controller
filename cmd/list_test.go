@@ -3,6 +3,9 @@
 package cmd
 
 import (
+	"encoding/json"
+	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -439,11 +442,55 @@ func TestFormatDeploymentJSON(t *testing.T) {
 		},
 	}
 
-	// This test mainly verifies that the function doesn't panic
-	// and can handle the basic case
-	err := formatDeploymentJSON(testDeployments)
+	// Capture stdout to validate JSON structure
+	r, w, err := os.Pipe()
 	if err != nil {
-		t.Errorf("formatDeploymentJSON() should not return error, got: %v", err)
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	// Execute the function
+	formatErr := formatDeploymentJSON(testDeployments)
+
+	// Restore stdout and read captured output
+	w.Close()
+	os.Stdout = oldStdout
+
+	if formatErr != nil {
+		t.Errorf("formatDeploymentJSON() should not return error, got: %v", formatErr)
+	}
+
+	// Read and validate JSON output
+	outputBytes, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("Failed to read captured output: %v", err)
+	}
+
+	// Validate JSON structure
+	var output struct {
+		Kind       string               `json:"kind"`
+		APIVersion string               `json:"apiVersion"`
+		Items      []k8s.DeploymentInfo `json:"items"`
+		Count      int                  `json:"count"`
+	}
+
+	if err := json.Unmarshal(outputBytes, &output); err != nil {
+		t.Errorf("Failed to parse JSON output: %v", err)
+	}
+
+	// Validate expected fields
+	if output.Kind != "DeploymentList" {
+		t.Errorf("Expected kind 'DeploymentList', got '%s'", output.Kind)
+	}
+	if output.APIVersion != "apps/v1" {
+		t.Errorf("Expected apiVersion 'apps/v1', got '%s'", output.APIVersion)
+	}
+	if output.Count != len(testDeployments) {
+		t.Errorf("Expected count %d, got %d", len(testDeployments), output.Count)
+	}
+	if len(output.Items) != len(testDeployments) {
+		t.Errorf("Expected %d items, got %d", len(testDeployments), len(output.Items))
 	}
 }
 

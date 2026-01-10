@@ -181,6 +181,7 @@ func createTestDeployment(name, namespace string, replicas int32, images []strin
 		Status: appsv1.DeploymentStatus{
 			ReadyReplicas:     replicas,
 			AvailableReplicas: replicas,
+			UpdatedReplicas:   replicas,
 		},
 	}
 }

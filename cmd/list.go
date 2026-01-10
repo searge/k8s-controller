@@ -49,6 +49,8 @@ var (
 	outputFormat string
 
 	// labelSelector allows filtering resources by labels.
+	// Uses the standard Kubernetes label selector syntax (e.g., "app=nginx", "tier=frontend,environment=prod").
+	// Supports equality-based (=, ==, !=) and set-based (in, notin, exists) selectors.
 	labelSelector string
 )
 

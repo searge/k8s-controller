@@ -5,6 +5,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -109,10 +110,14 @@ func LoadKubeconfig(config ClientConfig, logger zerolog.Logger) (*rest.Config, e
 
 	// Log current context
 	if rawConfig, err := kubeConfig.RawConfig(); err == nil {
-		logger.Info().
-			Str("context", rawConfig.CurrentContext).
-			Str("cluster", rawConfig.Contexts[rawConfig.CurrentContext].Cluster).
-			Msg("Loaded Kubernetes configuration")
+		logEvent := logger.Info().Str("context", rawConfig.CurrentContext)
+
+		// Safely access context details to avoid nil pointer dereference
+		if ctx, ok := rawConfig.Contexts[rawConfig.CurrentContext]; ok {
+			logEvent = logEvent.Str("cluster", ctx.Cluster)
+		}
+
+		logEvent.Msg("Loaded Kubernetes configuration")
 	}
 
 	return restConfig, nil
@@ -286,12 +291,14 @@ func collectContainerImages(containers []corev1.Container, imageSet map[string]s
 	}
 }
 
-// convertImageSetToSlice converts a map of images to a slice.
+// convertImageSetToSlice converts a map of images to a sorted slice.
+// Sorting ensures consistent output across test runs and API calls.
 func convertImageSetToSlice(imageSet map[string]struct{}) []string {
 	images := make([]string, 0, len(imageSet))
 	for image := range imageSet {
 		images = append(images, image)
 	}
+	sort.Strings(images)
 	return images
 }
 
