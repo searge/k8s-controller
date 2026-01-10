@@ -44,6 +44,7 @@ type DeploymentInfo struct {
 		Desired   int32 `json:"desired"`
 		Available int32 `json:"available"`
 		Ready     int32 `json:"ready"`
+		Updated   int32 `json:"updated"`
 	} `json:"replicas"`
 	Age       time.Duration `json:"age"`
 	Images    []string      `json:"images"`
@@ -260,6 +261,7 @@ func (c *Client) createDeploymentInfo(deployment appsv1.Deployment, now time.Tim
 	}
 	info.Replicas.Available = deployment.Status.AvailableReplicas
 	info.Replicas.Ready = deployment.Status.ReadyReplicas
+	info.Replicas.Updated = deployment.Status.UpdatedReplicas
 
 	return info
 }

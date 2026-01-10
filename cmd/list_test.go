@@ -392,10 +392,12 @@ func TestFormatDeploymentOutput(t *testing.T) {
 				Desired   int32 `json:"desired"`
 				Available int32 `json:"available"`
 				Ready     int32 `json:"ready"`
+				Updated   int32 `json:"updated"`
 			}{
 				Desired:   3,
 				Available: 3,
 				Ready:     3,
+				Updated:   3,
 			},
 			Age:       24 * time.Hour,
 			Images:    []string{testImageNginx},
@@ -467,10 +469,12 @@ func TestFormatDeploymentTable(t *testing.T) {
 						Desired   int32 `json:"desired"`
 						Available int32 `json:"available"`
 						Ready     int32 `json:"ready"`
+						Updated   int32 `json:"updated"`
 					}{
 						Desired:   1,
 						Available: 1,
 						Ready:     1,
+						Updated:   1,
 					},
 					Age:    time.Hour,
 					Images: []string{"nginx:latest"},

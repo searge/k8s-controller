@@ -30,7 +30,8 @@ const (
 	testImageBusybox     = "busybox:latest"
 	testNamespaceDefault = "default"
 	testNamespaceKube    = "kube-system"
-	testMsgFailedClose   = "Failed to close client"
+	testDeploymentNginx  = "nginx-deployment"
+	testDeploymentRedis  = "redis-deployment"
 )
 
 // TestLoadKubeconfigFileNotFound tests error handling when kubeconfig file doesn't exist.
@@ -189,7 +190,7 @@ func TestListDeployments(t *testing.T) {
 	logger := zerolog.New(os.Stderr)
 
 	t.Run("list from specific namespace", func(t *testing.T) {
-		deployment := createTestDeployment("nginx-deployment", testNamespaceDefault, 3, []string{testImageNginx})
+		deployment := createTestDeployment(testDeploymentNginx, testNamespaceDefault, 3, []string{testImageNginx})
 		client := setupTestClient(logger, []runtime.Object{deployment}, false)
 
 		ctx := context.Background()
@@ -203,14 +204,14 @@ func TestListDeployments(t *testing.T) {
 		if len(deployments) != 1 {
 			t.Fatalf("expected 1 deployment, got %d", len(deployments))
 		}
-		if deployments[0].Name != "nginx-deployment" {
-			t.Errorf("expected deployment name %s, got %s", "nginx-deployment", deployments[0].Name)
+		if deployments[0].Name != testDeploymentNginx {
+			t.Errorf("expected deployment name %s, got %s", testDeploymentNginx, deployments[0].Name)
 		}
 	})
 
 	t.Run("list from all namespaces", func(t *testing.T) {
-		dep1 := createTestDeployment("nginx-deployment", testNamespaceDefault, 3, []string{testImageNginx})
-		dep2 := createTestDeployment("redis-deployment", testNamespaceKube, 1, []string{testImageRedis})
+		dep1 := createTestDeployment(testDeploymentNginx, testNamespaceDefault, 3, []string{testImageNginx})
+		dep2 := createTestDeployment(testDeploymentRedis, testNamespaceKube, 1, []string{testImageRedis})
 		client := setupTestClient(logger, []runtime.Object{dep1, dep2}, false)
 
 		ctx := context.Background()
