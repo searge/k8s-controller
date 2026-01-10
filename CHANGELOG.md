@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-01-10
+
+### 🐛 Bug/Lint Fixes
+
+- *(ci)* Bump builder image to go 1.25
+
 ## [0.6.0] - 2026-01-10
 
 ### 🚀 Features
