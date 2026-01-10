@@ -3,10 +3,10 @@
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
     "ghcr.io/devcontainers/features/go:1": {
-      "version": "1.24"
+      "version": "1.25"
     },
     "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
-      "version": "1.30.0",
+      "version": "1.31.0",
       "helm": "latest",
       "minikube": "none"
     },
@@ -39,6 +39,7 @@
   // Enable privileged mode for Kubernetes components
   "runArgs": [
     "--privileged",
+    "--cgroupns=host",
     "--security-opt",
     "seccomp=unconfined",
     "--cap-add=SYS_ADMIN",

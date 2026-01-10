@@ -6,7 +6,7 @@ runc_version:         "1.2.6"
 cni_version:          "1.6.2"
 
 # --- System Configuration ---
-arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+arch: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
 cluster_cidr:         "10.216.0.0/16"   # 216 = 6^3 (Cube)
 service_cidr:         "10.216.224.0/24" # 224 = 4^2+8^2+12^2 (sum of 3 squares)
 pod_network_cidr:     "10.144.0.0/16"   # fibonnacci number

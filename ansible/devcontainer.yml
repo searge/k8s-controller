@@ -8,8 +8,11 @@
     wip_dir: "/tmp/k8s_wip"
 
     # --- User Configuration ---
-    devcontainer_user: "{{ ansible_env.SUDO_USER | default(ansible_env.USER) | default('vscode') }}"
+    devcontainer_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER'] | default('vscode')) }}"
     user_home: "/home/{{ devcontainer_user }}"
+    download_timeout: 120
+    download_retries: 3
+    download_delay: 5
 
   tasks:
     - name: "Install K8s binaries"
@@ -56,10 +59,15 @@
             url: "https://dl.k8s.io/v{{ k8s_version }}/bin/linux/{{ arch }}/{{ item }}"
             dest: "{{ bin_path }}/{{ item }}"
             mode: "0755"
+            timeout: "{{ download_timeout }}"
           loop:
             - kubelet
             - kube-controller-manager
             - kube-scheduler
+          register: k8s_component_downloads
+          retries: "{{ download_retries }}"
+          delay: "{{ download_delay }}"
+          until: k8s_component_downloads is succeeded
 
         - name: "Install | Download and unpack Containerd"
           ansible.builtin.unarchive:
@@ -91,6 +99,12 @@
             dest: "{{ cni_path }}"
             remote_src: true
             creates: "{{ cni_path }}/bridge"
+
+        - name: "Install | Ensure iptables is available"
+          ansible.builtin.apt:
+            name: iptables
+            state: present
+            update_cache: true
 
     - name: "Generate certificates and tokens"
       tags: ["certs"]
