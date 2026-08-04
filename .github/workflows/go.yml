@@ -63,7 +63,11 @@ jobs:
           go-version: ${{ env.go-version }}
           cache-dependency-path: "./go.mod"
       - name: Test
-        run: go test -v ${{ matrix.dir }}
+        env:
+          # The matrix value comes from find(1) output, so it reaches the shell
+          # as data rather than as part of the script.
+          TEST_DIR: ${{ matrix.dir }}
+        run: go test -v "$TEST_DIR"
 
   coverage:
     runs-on: ubuntu-24.04

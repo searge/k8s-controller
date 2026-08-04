@@ -85,11 +85,17 @@ jobs:
           output: 'trivy-summary.txt'
 
       - name: Add Trivy scan results to summary
+        env:
+          # Through the environment, not interpolated into the script. A tag name
+          # may legally contain `$( )` and backticks -- git check-ref-format
+          # allows them -- so expanding the version here would run commands.
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           {
             echo "## 🛡️ Security Scan Results"
             echo ""
-            echo "### Image: \`${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}\`"
+            echo "### Image: \`${IMAGE_NAME}:${VERSION}\`"
             echo ""
             echo '```'
             cat trivy-summary.txt

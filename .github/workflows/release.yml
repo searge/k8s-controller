@@ -198,10 +198,14 @@ jobs:
           if [ -f "CHANGELOG.md" ]; then
             awk '/^## \['"$VERSION_NUMBER"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > current_changelog.md
             if [ -s current_changelog.md ]; then
+              # Random delimiter: a changelog line that is literally "EOF" would
+              # otherwise close the value early, truncating the release body or
+              # letting the file inject further step outputs.
+              delimiter="changelog_$(uuidgen)"
               {
-                echo "changelog<<EOF"
+                echo "changelog<<$delimiter"
                 cat current_changelog.md
-                echo "EOF"
+                echo "$delimiter"
               } >> "$GITHUB_OUTPUT"
             else
               echo "changelog=No changelog found for version $VERSION_NUMBER" >> "$GITHUB_OUTPUT"
