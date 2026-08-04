@@ -34,14 +34,14 @@
 
         - name: "Install | Download and unpack Kubebuilder tools (etcd, kube-apiserver)"
           ansible.builtin.unarchive:
-            src: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{ k8s_version }}-linux-{{ arch }}.tar.gz"
+            src: "https://github.com/kubernetes-sigs/controller-tools/releases/download/envtest-v{{ k8s_version }}/envtest-v{{ k8s_version }}-linux-{{ arch }}.tar.gz"
             dest: "{{ wip_dir }}"
             remote_src: true
-            creates: "{{ wip_dir }}/kubebuilder/bin/kube-apiserver"
+            creates: "{{ wip_dir }}/controller-tools/envtest/kube-apiserver"
 
         - name: "Install | Move Kubebuilder binaries to {{ bin_path }}"
           ansible.builtin.copy:
-            src: "{{ wip_dir }}/kubebuilder/bin/{{ item }}"
+            src: "{{ wip_dir }}/controller-tools/envtest/{{ item }}"
             dest: "{{ bin_path }}/{{ item }}"
             mode: "0755"
             remote_src: true
