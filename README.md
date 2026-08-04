@@ -19,7 +19,7 @@ This project follows [the step-by-step tutorial](https://github.com/den-vasyliev
 
 ### Prerequisites
 
-- **Go 1.23.1+** - [Installation guide](https://golang.org/doc/install)
+- **Go 1.26+** - [Installation guide](https://golang.org/doc/install)
 - **Taskfile** - [Installation guide](https://taskfile.dev/installation/)
 - **Podman** - [Installation guide](https://podman.io/getting-started/installation)
 - **Docker** (optional) - Alternative to Podman
@@ -48,7 +48,7 @@ kubectl get all -A
 This automated setup creates:
 
 - Podman machine with Fedora CoreOS
-- Complete single-node Kubernetes cluster (v1.30.0)
+- Complete single-node Kubernetes cluster (v1.36.2)
 - All control plane components (etcd, API server, scheduler, controller-manager)
 - Kubelet with containerd runtime
 - CNI networking with bridge plugin

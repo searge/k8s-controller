@@ -170,7 +170,6 @@
               --profiling=false \
               --storage-backend=etcd3 \
               --v=0 \
-              --cloud-provider=external \
               --service-account-issuer=https://kubernetes.default.svc.cluster.local \
               --service-account-key-file={{ pki_path }}/sa.pub \
               --service-account-signing-key-file={{ pki_path }}/sa.key \
@@ -292,7 +291,6 @@
               --config={{ kubelet_data_path }}/config.yaml \
               --hostname-override={{ ansible_hostname }} \
               --node-ip={{ node_ip }} \
-              --pod-infra-container-image=registry.k8s.io/pause:3.10 \
               --max-pods=4  \
               --v=1 \
                 > {{ kubernetes_log_path }}/kubelet.log 2>&1 &
