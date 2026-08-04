@@ -95,7 +95,7 @@ tasks:
         {{.DOCKER_BIN}} run -t --rm
         -v $(pwd):/app
         -w /app
-        golangci/golangci-lint:v2.1.6
+        golangci/golangci-lint:v2.12.2
         golangci-lint run {{.CLI_ARGS}}
 
   markdownlint:
@@ -225,7 +225,7 @@ tasks:
   init:
     desc: "Init Podman machine"
     dir: "{{.USER_WORKING_DIR}}"
-    cmds: ["./scripts/init.sh"]
+    cmds: ["./scripts/vm/init.sh"]
 
   collections:
     desc: "Install Ansible collections"

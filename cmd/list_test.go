@@ -471,7 +471,9 @@ func captureJSONOutput(t *testing.T, deployments []k8s.DeploymentInfo) []byte {
 	}()
 
 	formatErr := formatDeploymentJSON(deployments)
-	w.Close()
+	if closeErr := w.Close(); closeErr != nil {
+		t.Fatalf("Failed to close pipe writer: %v", closeErr)
+	}
 
 	if formatErr != nil {
 		t.Errorf("formatDeploymentJSON() should not return error, got: %v", formatErr)

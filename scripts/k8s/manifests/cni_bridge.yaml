@@ -1,0 +1,36 @@
+# Goes through the CNI bridge, so it must get an IP from pod_network_cidr.
+apiVersion: v1
+kind: Pod
+metadata:
+  # Object names are DNS-1123 labels, so hyphens rather than snake_case.
+  name: cni-bridge
+  namespace: default
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: c
+      # Pinned so the fixture cannot change under the test. Keep in step with
+      # TEST_IMAGE in scripts/k8s/in_container.sh.
+      image: docker.io/library/busybox:1.38.0
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "sleep 3600"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+          ephemeral-storage: 16Mi
+        limits:
+          cpu: 100m
+          memory: 32Mi
+          ephemeral-storage: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]

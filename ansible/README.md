@@ -131,7 +131,7 @@ The devcontainer playbooks have their own tags: `install`, `certs`,
 Shared variables live in `group_vars/all.yml` and are read by every playbook:
 
 ```yaml
-k8s_version: "1.30.0"
+k8s_version: "1.36.2"
 containerd_version: "2.1.2"
 runc_version: "1.2.6"
 cni_version: "1.6.2"
