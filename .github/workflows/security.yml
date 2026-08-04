@@ -9,22 +9,30 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-permissions:
-  contents: write
-  packages: write
-  security-events: write
+permissions: {}
 
 jobs:
   build-and-scan:
     runs-on: ubuntu-24.04
+    permissions:
+      # The image is built with `push: false` into a local tarball and never
+      # pushed from here, so `packages: write` is not needed; `contents: write`
+      # was only ever used for the checkout.
+      contents: read
+      security-events: write   # uploads trivy-results.sarif to code scanning
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
-          cache-dependency-path: "./go.mod"
+          # Cache disabled: this workflow builds and publishes a release image, so
+          # a poisoned cache entry written by a lower-privileged run would end up
+          # inside a published artifact. Costs a cold module download per release.
+          cache: false
 
       - name: Extract version from tag
         id: version
@@ -68,6 +76,7 @@ jobs:
 
       # Security scan BEFORE pushing to registry
       - name: Run Trivy vulnerability scanner (Critical/High only)
+        id: trivy-gate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:scan
@@ -75,6 +84,16 @@ jobs:
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'  # Fail the build if critical/high vulnerabilities found
+
+      # if: always() matters -- the gate above exits 1 on a finding, and that is
+      # exactly when the SARIF is worth having in code scanning. Without it the
+      # upload would be skipped on every run that actually found something.
+      - name: Upload Trivy results to code scanning
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
 
       # Generate readable summary for GitHub Actions
       - name: Run Trivy for GitHub Summary

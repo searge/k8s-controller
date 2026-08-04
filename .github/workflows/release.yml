@@ -75,10 +75,16 @@ jobs:
             arch: amd64
             ext: ".exe"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          # workflow_run checks out the default branch by default, not the
+          # tag that triggered Security Checks -- without this the release
+          # artifacts would be built from whatever main points at.
+          ref: ${{ needs.check-security.outputs.version }}
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
           cache-dependency-path: "./go.mod"
@@ -88,11 +94,13 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+          VERSION: ${{ needs.check-security.outputs.version }}
+          EXT: ${{ matrix.ext }}
         run: |
           mkdir -p dist
           go build -v \
-            -ldflags "-w -s -X=github.com/Searge/k8s-controller/cmd.Version=${{ needs.check-security.outputs.version }}" \
-            -o dist/kc${{ matrix.ext }} \
+            -ldflags "-w -s -X=github.com/Searge/k8s-controller/cmd.Version=${VERSION}" \
+            -o "dist/kc${EXT}" \
             main.go
 
       - name: Create archive
@@ -107,7 +115,7 @@ jobs:
           ls -la kc.*
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: kc-${{ matrix.platform }}-${{ matrix.arch }}
           path: kc.${{ matrix.platform }}.${{ matrix.arch }}.*
@@ -120,7 +128,13 @@ jobs:
       contents: read
       packages: write   # pushes the image to ghcr.io
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          # workflow_run checks out the default branch by default, not the
+          # tag that triggered Security Checks -- without this the release
+          # artifacts would be built from whatever main points at.
+          ref: ${{ needs.check-security.outputs.version }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -134,10 +148,10 @@ jobs:
 
       - name: Generate Docker tags
         id: meta
+        env:
+          VERSION: ${{ needs.check-security.outputs.version }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         run: |
-          VERSION="${{ needs.check-security.outputs.version }}"
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-
           # Generate tags manually
           TAGS="${IMAGE}:${VERSION}"
           TAGS="${TAGS},${IMAGE}:latest"
@@ -175,11 +189,17 @@ jobs:
     permissions:
       contents: write   # creates the GitHub release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          # workflow_run checks out the default branch by default, not the
+          # tag that triggered Security Checks -- without this the release
+          # artifacts would be built from whatever main points at.
+          ref: ${{ needs.check-security.outputs.version }}
 
       # Download all binary artifacts
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: ./artifacts
 
@@ -193,8 +213,10 @@ jobs:
       # Extract changelog
       - name: Extract changelog for this version
         id: changelog
+        env:
+          VERSION: ${{ needs.check-security.outputs.version }}
         run: |
-          VERSION_NUMBER=$(echo "${{ needs.check-security.outputs.version }}" | sed 's/^v//')
+          VERSION_NUMBER="${VERSION#v}"
           if [ -f "CHANGELOG.md" ]; then
             awk '/^## \['"$VERSION_NUMBER"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > current_changelog.md
             if [ -s current_changelog.md ]; then

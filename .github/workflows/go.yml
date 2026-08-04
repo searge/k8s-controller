@@ -32,7 +32,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Find Test Dirs
         id: set-dirs
         run: |
@@ -56,9 +58,11 @@ jobs:
       matrix:
         dir: ${{fromJson(needs.find-test-dirs.outputs.dirs)}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ env.go-version }}
           cache-dependency-path: "./go.mod"
@@ -78,12 +82,18 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # default fetch-depth is insufficent to find previous coverage notes
           fetch-depth: 10
+          # Deliberately NOT persist-credentials: false, unlike every other
+          # checkout here. go-coverage-action pushes refs/notes/gocoverage using
+          # the credentials checkout leaves in .git/config; dropping them breaks
+          # it with `git push origin refs/notes/gocoverage` exit code 128.
+          # Suppressed for this one step in .github/zizmor.yml.
+          persist-credentials: true
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ env.go-version }}
           cache-dependency-path: "./go.mod"
