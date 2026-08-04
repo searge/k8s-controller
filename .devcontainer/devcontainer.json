@@ -1,6 +1,6 @@
 {
   "name": "k8s-controller",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
   "features": {
     "ghcr.io/devcontainers/features/go:1": {
       "version": "1.25"
@@ -18,7 +18,6 @@
     },
     "ghcr.io/rio/features/k9s:1": {},
     "ghcr.io/devcontainers-extra/features/go-task:1": {},
-    "ghcr.io/devcontainers-extra/features/ansible:2": {},
     "ghcr.io/devcontainers-extra/features/wget-apt-get:1": {},
     "ghcr.io/jungaretti/features/vim:1": {},
     "ghcr.io/devcontainers-extra/features/starship:1": {},
@@ -28,7 +27,7 @@
     "FORCE_COLOR": "1"
   },
   "remoteUser": "vscode",
-  "postCreateCommand": "task collections && task setup",
+  "postCreateCommand": "pipx install ansible-core && task collections && task setup",
   "hostRequirements": {
     "cpus": 4,
     "memory": "4gb"
