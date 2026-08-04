@@ -24,6 +24,9 @@ This project follows [the step-by-step tutorial](https://github.com/den-vasyliev
 - **Podman** - [Installation guide](https://podman.io/getting-started/installation)
 - **Docker** (optional) - Alternative to Podman
 
+Nothing installed locally? Use
+[Dev Container / Codespaces](#dev-container--codespaces) instead.
+
 ### One-Command Setup
 
 Get a complete Kubernetes development environment running in seconds:
@@ -50,6 +53,34 @@ This automated setup creates:
 - Kubelet with containerd runtime
 - CNI networking with bridge plugin
 - PKI infrastructure with auto-generated certificates
+
+### Dev Container / Codespaces
+
+The same cluster runs inside a Dev Container, so no Podman machine is needed.
+Open the repository in VS Code (*Reopen in Container*) or in
+[GitHub Codespaces](https://github.com/features/codespaces), then:
+
+```bash
+# Install etcd, kube-apiserver, kubelet, containerd, runc and CNI plugins
+task devcontainer
+
+# Generate PKI, render the unit files and start every component
+task devcontainer-run
+
+# Use the cluster
+kubectl get nodes
+kubectl get all -A
+```
+
+Two helpers are placed in the container home directory:
+
+```bash
+~/k8s-status.sh   # state of every component
+~/k8s-stop.sh     # stop the control plane
+```
+
+Both playbooks read the same `ansible/group_vars/all.yml` as `provision.yml`,
+so versions, CIDRs and paths match the Podman/Docker environment.
 
 ## Development Environment
 
@@ -79,6 +110,10 @@ task ssh          # SSH into the machine
 task provision    # Run Ansible provisioning
 task reboot       # Restart the machine
 task rm           # Remove the machine
+
+# Dev Container / Codespaces
+task devcontainer     # Install K8s components into the devcontainer
+task devcontainer-run # Start the control plane inside the devcontainer
 ```
 
 ## Progress
@@ -134,17 +169,21 @@ C4Container
 ## Project Structure
 
 ```bash
-├── ansible/              # Kubernetes cluster automation
-│   ├── README.md         # Detailed Ansible documentation
-│   ├── init.yml          # Initial system setup
-│   ├── provision.yml     # Main K8s provisioning
-│   └── templates/        # Service and config templates
-├── cmd/                  # CLI application code
-├── notebooks/            # Go learning notebooks
-├── scripts/              # Setup and utility scripts
-├── Taskfile.yaml        # Task automation
-├── Dockerfile           # Container image definition
-└── README.md            # This file
+├── .devcontainer/            # Dev Container / Codespaces definition
+├── ansible/                  # Kubernetes cluster automation
+│   ├── README.md             # Detailed Ansible documentation
+│   ├── group_vars/           # Shared vars: versions, CIDRs, paths
+│   ├── init.yml              # Initial system setup
+│   ├── provision.yml         # Main K8s provisioning (Podman VM)
+│   ├── devcontainer.yml      # Install K8s into a devcontainer
+│   ├── devcontainer-run.yml  # Run K8s inside a devcontainer
+│   └── templates/            # Service and config templates
+├── cmd/                      # CLI application code
+├── notebooks/                # Go learning notebooks
+├── scripts/                  # Setup and utility scripts
+├── Taskfile.yaml             # Task automation
+├── Dockerfile                # Container image definition
+└── README.md                 # This file
 ```
 
 ## 📚 Documentation
