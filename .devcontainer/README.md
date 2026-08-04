@@ -11,18 +11,19 @@ This devcontainer provisions a local, single-node Kubernetes control plane for c
 
 ## Getting started
 
-Run the setup once to install components and generate certs:
+Everything goes through [Task](https://taskfile.dev), which is the single
+source of truth for this repository. Run the setup once to install the
+components and generate the certificates:
 
 ```bash
 task collections
-cd ansible/
-ansible-playbook devcontainer.yml
+task devcontainer
 ```
 
 Start the cluster:
 
 ```bash
-ansible-playbook devcontainer-run.yml
+task devcontainer-run
 ```
 
 Verify:
@@ -40,13 +41,39 @@ Check or stop services:
 ~/k8s-stop.sh
 ```
 
-## Requirements for pods to start
+## Partial runs
 
-- `iptables` must be installed and usable.
-- The pause image must be pulled with a platform hint:
-  `sudo ctr -n k8s.io images pull --platform linux/amd64 registry.k8s.io/pause:3.10` (use `linux/arm64` on ARM)
-- Codespaces/devcontainer should run with `--cgroupns=host` so cgroup v2 can be delegated.
-- Containerd should use local image pull to avoid platform unpack errors.
+Both playbooks are tagged, so you can re-run only a part of them by
+passing extra arguments through Task:
+
+```bash
+task devcontainer-run -- -t preflight
+task devcontainer-run -- -t control-plane
+task devcontainer-run -- -t verify
+```
+
+Available tags:
+
+- `devcontainer.yml`: `install`, `certs`, `config`, `verify`, `summary`
+- `devcontainer-run.yml`: `preflight`, `control-plane` (alias `start`),
+  `verify` (alias `health`), `status` (alias `report`), and `debug`,
+  which is also tagged `never` and has to be requested explicitly.
+
+## What makes pods runnable
+
+These used to be manual steps. They are handled automatically now, so no
+extra commands are needed:
+
+- `iptables` is installed by `task devcontainer`
+  ("Install | Ensure iptables is available").
+- The pause image is pre-pulled with a platform hint by
+  `task devcontainer-run` ("Start | Pre-pull pause image for kubelet"),
+  using the architecture detected in `ansible/group_vars/all.yml`.
+- `--cgroupns=host` is already set in `runArgs` in
+  `.devcontainer/devcontainer.json`, so cgroup v2 can be delegated.
+- `use_local_image_pull = true` is set in the generated containerd config
+  (`ansible/templates/containerd-config.toml.j2`) to avoid platform
+  unpack errors.
 
 ## Common paths
 
@@ -68,7 +95,7 @@ Restart control plane and kubelet:
 
 ```bash
 ~/k8s-stop.sh
-ansible-playbook devcontainer-run.yml -t control-plane,worker
+task devcontainer-run -- -t control-plane
 ```
 
 View logs:
