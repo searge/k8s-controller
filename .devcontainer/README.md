@@ -1,90 +1,104 @@
 # Kubernetes Devcontainer Setup
 
-## ✅ Working Features
+This devcontainer provisions a local, single-node Kubernetes control plane for controller development and API testing.
 
-- **Full Kubernetes Control Plane** - etcd, kube-apiserver, kube-controller-manager, kube-scheduler
-- **Kubelet with containerd** - single-node cluster ready for development
-- **kubectl CLI** - all API operations work
-- **Pod scheduling** - pods are assigned to the node
-- **Service accounts & RBAC** - authentication and authorization work
-- **Custom Resources** - CRDs can be created and managed
+## What works
 
-## ⚠️ Known Limitations
+- Control plane components: etcd, kube-apiserver, kube-controller-manager, kube-scheduler
+- Kubelet with containerd on the same node
+- kubectl access to the API server
+- RBAC, service accounts, and CRDs
 
-### Pod Networking
+## Getting started
 
-Pods cannot start due to missing `iptables` in devcontainer environment:
+Everything goes through [Task](https://taskfile.dev), which is the single
+source of truth for this repository. Run the setup once to install the
+components and generate the certificates:
 
 ```bash
-failed to locate iptables: exec: "iptables": executable file not found in $PATH
+task collections
+task devcontainer
 ```
 
-**Impact:**
+Start the cluster:
 
-- Pods remain in `ContainerCreating` state
-- No network connectivity for pods
-- Services cannot route traffic
+```bash
+task devcontainer-run
+```
 
-**Workaround:** Use for development that doesn't require running pods (API testing, controller development, etc.)
+Verify:
 
-## 🚀 Getting Started
+```bash
+kubectl get nodes
+kubectl get all -A
+kubectl cluster-info
+```
 
-1. **Start the cluster:**
+Check or stop services:
 
-   ```bash
-   task collections  # Install Ansible collections
-   ansible-playbook devcontainer.yml     # Setup components
-   ansible-playbook devcontainer-run.yml # Start cluster
-   ```
+```bash
+~/k8s-status.sh
+~/k8s-stop.sh
+```
 
-2. **Verify cluster:**
+## Partial runs
 
-   ```bash
-   kubectl get nodes
-   kubectl get all -A
-   kubectl cluster-info
-   ```
+Both playbooks are tagged, so you can re-run only a part of them by
+passing extra arguments through Task:
 
-3. **Check status:**
+```bash
+task devcontainer-run -- -t preflight
+task devcontainer-run -- -t control-plane
+task devcontainer-run -- -t verify
+```
 
-   ```bash
-   ~/k8s-status.sh  # Check running processes
-   ~/k8s-stop.sh    # Stop all components
-   ```
+Available tags:
 
-## 🧪 What You Can Test
+- `devcontainer.yml`: `install`, `certs`, `config`, `verify`, `summary`
+- `devcontainer-run.yml`: `preflight`, `control-plane` (alias `start`),
+  `verify` (alias `health`), `status` (alias `report`), and `debug`,
+  which is also tagged `never` and has to be requested explicitly.
 
-- **API operations:** `kubectl apply`, `kubectl get`, `kubectl delete`
-- **Custom controllers:** Deploy and test Kubernetes operators
-- **CRDs:** Create custom resource definitions
-- **RBAC:** Test roles, bindings, service accounts
-- **Admission controllers:** Test webhooks and policies
-- **Scheduling:** Test node selectors, taints, tolerations
+## What makes pods runnable
 
-## 📁 Important Paths
+These used to be manual steps. They are handled automatically now, so no
+extra commands are needed:
 
-- **Logs:** `/var/log/kubernetes/`
-- **Configs:** `/etc/kubernetes/`
-- **Data:** `/var/lib/etcd/`, `/var/lib/kubelet/`
-- **Binaries:** `/usr/local/bin/`
+- `iptables` is installed by `task devcontainer`
+  ("Install | Ensure iptables is available").
+- The pause image is pre-pulled with a platform hint by
+  `task devcontainer-run` ("Start | Pre-pull pause image for kubelet"),
+  using the architecture detected in `ansible/group_vars/all.yml`.
+- `--cgroupns=host` is already set in `runArgs` in
+  `.devcontainer/devcontainer.json`, so cgroup v2 can be delegated.
+- `use_local_image_pull = true` is set in the generated containerd config
+  (`ansible/templates/containerd-config.toml.j2`) to avoid platform
+  unpack errors.
 
-## 🔧 Troubleshooting
+## Common paths
 
-**Cluster not responding?**
+- Logs: `/var/log/kubernetes/`
+- Configs: `/etc/kubernetes/`
+- Data: `/var/lib/etcd/`, `/var/lib/kubelet/`
+- Binaries: `/usr/local/bin/`
+
+## Troubleshooting
+
+Check running processes:
 
 ```bash
 ps aux | grep -E "(etcd|kube-|containerd)"
 ~/k8s-status.sh
 ```
 
-**Need to restart?**
+Restart control plane and kubelet:
 
 ```bash
 ~/k8s-stop.sh
-ansible-playbook devcontainer-run.yml -t control-plane,worker
+task devcontainer-run -- -t control-plane
 ```
 
-**View component logs:**
+View logs:
 
 ```bash
 tail -f /var/log/kubernetes/kubelet.log

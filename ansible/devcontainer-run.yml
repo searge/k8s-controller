@@ -5,7 +5,7 @@
   become: true
   vars:
     # --- User Configuration ---
-    devcontainer_user: "{{ ansible_env.SUDO_USER | default(ansible_env.USER) | default('vscode') }}"
+    devcontainer_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER'] | default('vscode')) }}"
 
   tasks:
     - name: "Pre-flight checks and setup"
@@ -75,7 +75,7 @@
         ################################################################
         - name: "Start | Start containerd"
           environment:
-            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
+            PATH: "{{ ansible_facts['env']['PATH'] | default('') }}:/opt/cni/bin:/usr/sbin"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/containerd \
               -c /etc/containerd/config.toml \
@@ -98,8 +98,25 @@
           ansible.builtin.shell: |
             {{ bin_path }}/ctr version
           register: containerd_test
-          retries: 3
+          until: containerd_test.rc == 0
+          retries: 10
           delay: 2
+          changed_when: false
+
+        - name: "Start | List images in the k8s.io namespace"
+          ansible.builtin.shell: |
+            {{ bin_path }}/ctr -n k8s.io images ls -q
+          register: pause_images
+          changed_when: false
+
+        - name: "Start | Pre-pull pause image for kubelet"
+          ansible.builtin.shell: |
+            {{ bin_path }}/ctr -n k8s.io images pull --platform linux/{{ arch }} registry.k8s.io/pause:3.10
+          register: pause_pull
+          until: pause_pull.rc == 0
+          retries: 5
+          delay: 3
+          when: "'registry.k8s.io/pause:3.10' not in pause_images.stdout_lines"
 
         ################################################################
         # ┌─┐┌┬┐┌─┐┌┬┐
@@ -190,7 +207,7 @@
         ################################################################
         - name: "Start | Start kube-controller-manager"
           environment:
-            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
+            PATH: "{{ ansible_facts['env']['PATH'] | default('') }}:/opt/cni/bin:/usr/sbin"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/kube-controller-manager \
               --kubeconfig={{ config_path }}/kube-controller-manager.kubeconfig \
@@ -268,7 +285,7 @@
         ################################################################
         - name: "Start | Start kubelet"
           environment:
-            PATH: "{{ ansible_env.PATH }}:/opt/cni/bin:/usr/sbin"
+            PATH: "{{ ansible_facts['env']['PATH'] | default('') }}:/opt/cni/bin:/usr/sbin"
           ansible.builtin.shell: |
             nohup {{ bin_path }}/kubelet \
               --kubeconfig={{ kubelet_data_path }}/kubeconfig \
