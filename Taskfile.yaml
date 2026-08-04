@@ -273,3 +273,32 @@ tasks:
         task ssh -- 'cd /srv/app && go-task provision' # To run from the host machine
     cmds:
       - ansible-playbook provision.yml {{.CLI_ARGS}}
+
+  ####################################################################
+  # DEVCONTAINER
+  ####################################################################
+  devcontainer:
+    dir: "{{.USER_WORKING_DIR}}/ansible"
+    desc: "Install K8s components into the devcontainer"
+    summary: |
+      Installs etcd, kube-apiserver, kubelet, containerd, runc and the CNI
+      plugins straight into the running devcontainer. No Podman VM needed.
+
+      Example:
+        task collections
+        task devcontainer
+    cmds:
+      - ansible-playbook devcontainer.yml {{.CLI_ARGS}}
+
+  devcontainer-run:
+    dir: "{{.USER_WORKING_DIR}}/ansible"
+    desc: "Start the control plane inside the devcontainer"
+    summary: |
+      Starts containerd, etcd and the control plane installed by
+      `task devcontainer`, then waits until the node reports Ready.
+
+      Example:
+        task devcontainer-run
+        kubectl get nodes
+    cmds:
+      - ansible-playbook devcontainer-run.yml {{.CLI_ARGS}}
