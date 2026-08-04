@@ -13,35 +13,35 @@ reviews:
   auto_review:
     enabled: true
     drafts: true
+  tools:
+      ast-grep:
+        rule_dirs: []
+        util_dirs: []
+        essential_rules: true
+        packages: []
+      shellcheck:
+        enabled: true
+      markdownlint:
+        enabled: true
+      github-checks:
+        enabled: true
+        timeout_ms: 90000
+      languagetool:
+        enabled: true
+        enabled_rules: []
+        disabled_rules: []
+        enabled_categories: []
+        disabled_categories: []
+        enabled_only: false
+        level: default
+      hadolint:
+        enabled: true
+      golangci-lint:
+        enabled: true
+        config_file: ""
+      yamllint:
+        enabled: true
+      gitleaks:
+        enabled: true
 chat:
   auto_reply: true
-tools:
-    ast-grep:
-      rule_dirs: []
-      util_dirs: []
-      essential_rules: true
-      packages: []
-    shellcheck:
-      enabled: true
-    markdownlint:
-      enabled: true
-    github-checks:
-      enabled: true
-      timeout_ms: 90000
-    languagetool:
-      enabled: true
-      enabled_rules: []
-      disabled_rules: []
-      enabled_categories: []
-      disabled_categories: []
-      enabled_only: false
-      level: default
-    hadolint:
-      enabled: true
-    golangci-lint:
-      enabled: true
-      config_file: ""
-    yamllint:
-      enabled: true
-    gitleaks:
-      enabled: true
