@@ -94,18 +94,29 @@
           retries: 10
           delay: 2
 
-        - name: "Start | Pre-pull pause image for kubelet"
-          ansible.builtin.shell: |
-            {{ bin_path }}/ctr -n k8s.io images pull --platform linux/{{ arch }} registry.k8s.io/pause:3.10
-          register: pause_pull
-          changed_when: "'resolved' in pause_pull.stdout or 'done' in pause_pull.stdout or pause_pull.rc == 0"
-
         - name: "Start | Test containerd"
           ansible.builtin.shell: |
             {{ bin_path }}/ctr version
           register: containerd_test
-          retries: 3
+          until: containerd_test.rc == 0
+          retries: 10
           delay: 2
+          changed_when: false
+
+        - name: "Start | List images in the k8s.io namespace"
+          ansible.builtin.shell: |
+            {{ bin_path }}/ctr -n k8s.io images ls -q
+          register: pause_images
+          changed_when: false
+
+        - name: "Start | Pre-pull pause image for kubelet"
+          ansible.builtin.shell: |
+            {{ bin_path }}/ctr -n k8s.io images pull --platform linux/{{ arch }} registry.k8s.io/pause:3.10
+          register: pause_pull
+          until: pause_pull.rc == 0
+          retries: 5
+          delay: 3
+          when: "'registry.k8s.io/pause:3.10' not in pause_images.stdout_lines"
 
         ################################################################
         # ┌─┐┌┬┐┌─┐┌┬┐
