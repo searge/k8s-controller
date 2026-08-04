@@ -1,9 +1,13 @@
 name: "Security Checks"
 
+# Called by release.yml rather than triggered directly. Previously this ran on
+# `push: tags` and Release hung off it via `workflow_run`; that trigger made
+# Release run in the default branch's context, so its checkouts needed an
+# explicit `ref:` to get the tag -- which scanners read as checking out
+# untrusted code. As a called workflow, github.ref is the caller's tag and no
+# dynamic ref is needed anywhere.
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_call:
 
 env:
   REGISTRY: ghcr.io

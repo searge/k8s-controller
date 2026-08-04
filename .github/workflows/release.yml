@@ -1,10 +1,9 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["Security Checks"]
-    types:
-      - completed
+  push:
+    tags:
+      - 'v*.*.*'
 
 env:
   REGISTRY: ghcr.io
@@ -15,34 +14,40 @@ env:
 permissions: {}
 
 jobs:
-  # Simple check: if security passed, we can release
-  check-security:
+  # Build the image and scan it. Nothing below runs unless this passes.
+  security:
+    uses: ./.github/workflows/security.yml
+    permissions:
+      # A called workflow cannot exceed what the calling job grants, so these
+      # mirror the permissions its own job asks for.
+      contents: read
+      security-events: write
+
+  # Refuse to release from anything that is not a plain vN.N.N tag. The trigger
+  # already filters on v*.*.*, but that glob also matches e.g. v1.2.3-rc$(id),
+  # and the value ends up in a Docker tag and a release name.
+  check-tag:
+    needs: security
     runs-on: ubuntu-24.04
-    if: github.event.workflow_run.conclusion == 'success'
     permissions: {}
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Extract version from branch
+      - name: Validate the release tag
         id: version
         env:
-          # Passed through the environment rather than interpolated into the
-          # script. head_branch is attacker-controlled -- a tag or branch named
-          # with shell metacharacters would otherwise execute here, and this
-          # workflow can write to the repo and the registry.
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          TAG: ${{ github.ref_name }}
         run: |
-          # Security Checks only runs on v*.*.* tags, so this must look like one.
-          if [[ ! "$HEAD_BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::refusing to release from unexpected ref: $HEAD_BRANCH"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::refusing to release from unexpected tag: $TAG"
             exit 1
           fi
-          echo "version=$HEAD_BRANCH" >> "$GITHUB_OUTPUT"
-          echo "✅ Security checks passed for: $HEAD_BRANCH"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "✅ Security checks passed for: $TAG"
 
   # Build binaries for multiple platforms
   build-binaries:
-    needs: check-security
+    needs: check-tag
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -78,23 +83,22 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          # workflow_run checks out the default branch by default, not the
-          # tag that triggered Security Checks -- without this the release
-          # artifacts would be built from whatever main points at.
-          ref: ${{ needs.check-security.outputs.version }}
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
-          cache-dependency-path: "./go.mod"
+          # Cache disabled: this workflow publishes release binaries, so a
+          # poisoned cache entry written by a lower-privileged run could end up
+          # compiled into them. Costs a cold module download per matrix leg.
+          cache: false
 
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-          VERSION: ${{ needs.check-security.outputs.version }}
+          VERSION: ${{ needs.check-tag.outputs.version }}
           EXT: ${{ matrix.ext }}
         run: |
           mkdir -p dist
@@ -122,7 +126,7 @@ jobs:
 
   # Build and push Docker images
   build-docker:
-    needs: check-security
+    needs: check-tag
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -131,10 +135,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          # workflow_run checks out the default branch by default, not the
-          # tag that triggered Security Checks -- without this the release
-          # artifacts would be built from whatever main points at.
-          ref: ${{ needs.check-security.outputs.version }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -149,7 +149,7 @@ jobs:
       - name: Generate Docker tags
         id: meta
         env:
-          VERSION: ${{ needs.check-security.outputs.version }}
+          VERSION: ${{ needs.check-tag.outputs.version }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         run: |
           # Generate tags manually
@@ -178,24 +178,20 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ needs.check-security.outputs.version }}
+            VERSION=${{ needs.check-tag.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   # Create GitHub Release with all artifacts
   create-release:
     runs-on: ubuntu-24.04
-    needs: [check-security, build-binaries, build-docker]
+    needs: [check-tag, build-binaries, build-docker]
     permissions:
       contents: write   # creates the GitHub release
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          # workflow_run checks out the default branch by default, not the
-          # tag that triggered Security Checks -- without this the release
-          # artifacts would be built from whatever main points at.
-          ref: ${{ needs.check-security.outputs.version }}
 
       # Download all binary artifacts
       - name: Download all artifacts
@@ -214,7 +210,7 @@ jobs:
       - name: Extract changelog for this version
         id: changelog
         env:
-          VERSION: ${{ needs.check-security.outputs.version }}
+          VERSION: ${{ needs.check-tag.outputs.version }}
         run: |
           VERSION_NUMBER="${VERSION#v}"
           if [ -f "CHANGELOG.md" ]; then
@@ -240,8 +236,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ needs.check-security.outputs.version }}
-          name: Release ${{ needs.check-security.outputs.version }}
+          tag_name: ${{ needs.check-tag.outputs.version }}
+          name: Release ${{ needs.check-tag.outputs.version }}
           body: |
             ${{ steps.changelog.outputs.changelog }}
 
@@ -249,7 +245,7 @@ jobs:
 
             **Docker Image:**
             ```bash
-            docker pull ghcr.io/${{ github.repository }}:${{ needs.check-security.outputs.version }}
+            docker pull ghcr.io/${{ github.repository }}:${{ needs.check-tag.outputs.version }}
             ```
 
             **Binary Archives:**
@@ -270,7 +266,7 @@ jobs:
             # Extract kc.windows.amd64.zip and add kc.exe to PATH
             ```
           draft: false
-          prerelease: ${{ contains(needs.check-security.outputs.version, '-') }}
+          prerelease: ${{ contains(needs.check-tag.outputs.version, '-') }}
           files: |
             release-files/*
           generate_release_notes: true
