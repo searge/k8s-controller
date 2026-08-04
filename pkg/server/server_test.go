@@ -94,8 +94,9 @@ func TestCreateHandler(t *testing.T) {
 // TestStart tests the Start function.
 func TestStart(t *testing.T) {
 	t.Run("start server with valid port", func(t *testing.T) {
-		// Find an available port
-		listener, err := net.Listen("tcp", ":0")
+		// Find an available port. Bound to loopback rather than every
+		// interface -- the listener only exists to learn a free port number.
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("Failed to find available port: %v", err)
 		}

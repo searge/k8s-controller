@@ -20,31 +20,38 @@ on:
 env:
   go-version: 1.26
 
-permissions:
-  actions: write
-  contents: write
-  pull-requests: write
-  statuses: write
+# No workflow-level permissions: each job asks for what it needs, so a job that
+# only reads the checkout cannot write to the repo. `actions: write` and
+# `statuses: write` were dropped entirely -- nothing in this workflow calls those
+# APIs (checked against the bundled go-coverage-action).
+permissions: {}
 
 jobs:
   find-test-dirs:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Find Test Dirs
         id: set-dirs
         run: |
+          # The directory name is passed to sh as a positional parameter rather
+          # than substituted into the script, so a crafted path cannot inject
+          # commands. --compact-output keeps the JSON on one line for GITHUB_OUTPUT.
           dirs=$(find . -type d -not -path '.' \
-            -exec sh -c 'ls "{}"/*.go 2>/dev/null \
-            | grep -q "_test.go$"' \; -print \
-            | jq --raw-input --slurp 'split("\n")[:-1]')
-          echo "dirs=$(echo $dirs)" >> $GITHUB_OUTPUT
+            -exec sh -c 'ls "$1"/*.go 2>/dev/null \
+            | grep -q "_test.go$"' _ {} \; -print \
+            | jq --raw-input --slurp --compact-output 'split("\n")[:-1]')
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
     outputs:
         dirs: ${{ steps.set-dirs.outputs.dirs }}
 
   test:
     runs-on: ubuntu-24.04
     needs: find-test-dirs
+    permissions:
+      contents: read
     strategy:
       matrix:
         dir: ${{fromJson(needs.find-test-dirs.outputs.dirs)}}
@@ -61,6 +68,11 @@ jobs:
   coverage:
     runs-on: ubuntu-24.04
     needs: find-test-dirs
+    permissions:
+      # go-coverage-action pushes previous coverage as git notes
+      # (`git push origin refs/notes/gocoverage`) and comments on the PR.
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,7 +85,7 @@ jobs:
           cache-dependency-path: "./go.mod"
       - name: Go Coverage Report
         id: coverage
-        uses: gwatts/go-coverage-action@v2
+        uses: gwatts/go-coverage-action@2845595538a59d63d1bf55f109c14e104c6f7cb3 # v2
         with:
           coverage-threshold: 60
           cover-pkg: ./...
@@ -86,6 +98,7 @@ jobs:
   tests-complete:
     runs-on: ubuntu-24.04
     needs: [test, coverage]
+    permissions: {}
     steps:
       - name: Tests completed successfully
         run: echo "All tests have passed successfully"

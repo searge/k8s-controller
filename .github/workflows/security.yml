@@ -30,11 +30,17 @@ jobs:
         id: version
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
 
       - name: Setup Taskfile
-        uses: Illbjorn/setup-task@0.1.0
+        # Was Illbjorn/setup-task@0.1.0, whose repository no longer exists on
+        # GitHub. That is worse than an unpinned action: a deleted namespace can
+        # be re-registered by anyone, and this workflow can write to the repo and
+        # the registry. Replaced with the action maintained by the Task project.
+        uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+        with:
+          version: 3.x
 
       # Quick smoke test - if it builds, it's probably fine
       - name: Build application
@@ -43,11 +49,11 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       # Build image locally first for security scanning
       - name: Build Docker image for scanning
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
           platforms: linux/amd64  # Single platform for scanning
@@ -62,7 +68,7 @@ jobs:
 
       # Security scan BEFORE pushing to registry
       - name: Run Trivy vulnerability scanner (Critical/High only)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:scan
           format: 'sarif'
@@ -72,7 +78,7 @@ jobs:
 
       # Generate readable summary for GitHub Actions
       - name: Run Trivy for GitHub Summary
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:scan
           format: 'table'
@@ -80,10 +86,12 @@ jobs:
 
       - name: Add Trivy scan results to summary
         run: |
-          echo "## 🛡️ Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Image: \`${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat trivy-summary.txt >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🛡️ Security Scan Results"
+            echo ""
+            echo "### Image: \`${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}\`"
+            echo ""
+            echo '```'
+            cat trivy-summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
