@@ -225,7 +225,7 @@ tasks:
   init:
     desc: "Init Podman machine"
     dir: "{{.USER_WORKING_DIR}}"
-    cmds: ["./scripts/init.sh"]
+    cmds: ["./scripts/vm/init.sh"]
 
   collections:
     desc: "Install Ansible collections"

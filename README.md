@@ -180,7 +180,10 @@ C4Container
 │   └── templates/            # Service and config templates
 ├── cmd/                      # CLI application code
 ├── notebooks/                # Go learning notebooks
-├── scripts/                  # Setup and utility scripts
+├── scripts/
+│   ├── ci/                   # Release tooling
+│   ├── k8s/                  # Runtime smoke tests (see scripts/k8s/README.md)
+│   └── vm/                   # Podman machine setup
 ├── Taskfile.yaml             # Task automation
 ├── Dockerfile                # Container image definition
 └── README.md                 # This file
