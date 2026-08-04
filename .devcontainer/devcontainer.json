@@ -20,8 +20,7 @@
     "ghcr.io/devcontainers-extra/features/go-task:1": {},
     "ghcr.io/devcontainers-extra/features/wget-apt-get:1": {},
     "ghcr.io/jungaretti/features/vim:1": {},
-    "ghcr.io/devcontainers-extra/features/starship:1": {},
-    "ghcr.io/devcontainers-contrib/features/zsh-plugins:0": {}
+    "ghcr.io/devcontainers-extra/features/starship:1": {}
   },
   "containerEnv": {
     "FORCE_COLOR": "1"
