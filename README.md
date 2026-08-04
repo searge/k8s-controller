@@ -61,10 +61,10 @@ Open the repository in VS Code (*Reopen in Container*) or in
 [GitHub Codespaces](https://github.com/features/codespaces), then:
 
 ```bash
-# Install etcd, kube-apiserver, kubelet, containerd, runc and CNI plugins
+# Install the binaries, generate the PKI and write the config files
 task devcontainer
 
-# Generate PKI, render the unit files and start every component
+# Start containerd, etcd, the control plane components and kubelet
 task devcontainer-run
 
 # Use the cluster
