@@ -14,7 +14,11 @@ say() {
   return 0
 }
 
-die() {
+# Never returns -- callers rely on `... || die "msg"` aborting the script. Sonar's
+# S7682 does not treat `exit` as terminal and asks for a return here; adding one
+# after `exit 1` would be unreachable, and replacing the exit would let callers
+# carry on past a fatal error.
+die() { # NOSONAR
   printf 'ERROR: %s\n' "$*" >&2
   exit 1
 }
