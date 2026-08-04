@@ -1,5 +1,2 @@
+# Single maintainer: @searge owns every path in this repository.
 * @searge
-
-# Core application directories
-/cmd/ @gidra39 @oleksiihead
-/pkg/ @gidra39 @oleksiihead
