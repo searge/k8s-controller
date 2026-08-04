@@ -87,10 +87,10 @@ kubectl get all -A
 Inside a Dev Container there is no Podman machine, so the playbooks run locally:
 
 ```bash
-# Install etcd, kube-apiserver, kubelet, containerd, runc and CNI plugins
+# Install the binaries, generate the PKI and write the config files
 task devcontainer
 
-# Generate PKI, render the unit files and start every component
+# Start containerd, etcd, the control plane components and kubelet
 task devcontainer-run
 ```
 
@@ -122,8 +122,9 @@ The main provisioning playbook supports these tags for selective execution:
 
 The devcontainer playbooks have their own tags: `install`, `certs`,
 `config`, `verify` and `summary` for `devcontainer.yml`; `preflight`,
-`start`, `control-plane`, `health`, `status` and `report` for
-`devcontainer-run.yml`.
+`control-plane`, `start`, `verify`, `health`, `status`, `report` and
+`debug` for `devcontainer-run.yml`. The debug block is also tagged
+`never`, so it only runs when you ask for it with `-t debug`.
 
 ## Configuration
 
