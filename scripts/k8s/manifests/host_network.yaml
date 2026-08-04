@@ -25,16 +25,20 @@ spec:
       type: RuntimeDefault
   containers:
     - name: c
-      image: docker.io/library/busybox:latest
+      # Pinned so the fixture cannot change under the test. Keep in step with
+      # TEST_IMAGE in scripts/k8s/in_container.sh.
+      image: docker.io/library/busybox:1.38.0
       imagePullPolicy: IfNotPresent
       command: ["sh", "-c", "sleep 3600"]
       resources:
         requests:
           cpu: 10m
           memory: 16Mi
+          ephemeral-storage: 16Mi
         limits:
           cpu: 100m
           memory: 32Mi
+          ephemeral-storage: 64Mi
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true

@@ -4,8 +4,15 @@
 # static pods reach Running.
 set -u
 
-say() { printf '\n=== %s ===\n' "$*"; }
+say() {
+  printf '\n=== %s ===\n' "$*"
+  return 0
+}
+
 LOG=/out/logs   # bind-mounted from the host, survives the --rm container
+ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+# Keep in step with the image in both pod manifests under manifests/.
+TEST_IMAGE="docker.io/library/busybox:1.38.0"
 mkdir -p "$LOG" /etc/containerd /etc/cni/net.d /etc/kubernetes/manifests /var/lib/kubelet
 
 say "versions"
@@ -44,18 +51,16 @@ cat /var/lib/kubelet/config.yaml
 say "start containerd"
 nohup containerd -c /etc/containerd/config.toml > "$LOG/containerd.log" 2>&1 &
 for _ in $(seq 1 30); do
-  [ -S /run/containerd/containerd.sock ] && break
+  [[ -S /run/containerd/containerd.sock ]] && break
   sleep 1
 done
-[ -S /run/containerd/containerd.sock ] || {
+[[ -S /run/containerd/containerd.sock ]] || {
   echo "FAIL: containerd socket never appeared"; tail -20 "$LOG/containerd.log"; exit 1; }
 ctr version | tail -2
 
 say "pre-pull images"
-ctr -n k8s.io images pull "--platform=linux/$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')" \
-  registry.k8s.io/pause:3.10 2>&1 | tail -1
-ctr -n k8s.io images pull "--platform=linux/$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')" \
-  docker.io/library/busybox:latest 2>&1 | tail -1
+ctr -n k8s.io images pull "--platform=linux/$ARCH" registry.k8s.io/pause:3.10 2>&1 | tail -1
+ctr -n k8s.io images pull "--platform=linux/$ARCH" "$TEST_IMAGE" 2>&1 | tail -1
 
 say "CRI reachable"
 export CONTAINER_RUNTIME_ENDPOINT=unix:///run/containerd/containerd.sock
@@ -73,15 +78,24 @@ kill -0 "$KUBELET_PID" 2>/dev/null || {
 
 say "wait for static pods (up to 90s)"
 # Count with crictl's own state filters. Grepping `-o json` for state strings is
-# fragile enough to report 0 on a healthy node.
-pods_ready() { crictl pods --state ready -q 2>/dev/null | grep -c . ; }
-ctrs_running() { crictl ps --state running -q 2>/dev/null | grep -c . ; }
+# fragile enough to report 0 on a healthy node. A crictl failure also counts as
+# zero, which fails the test rather than passing it silently.
+pods_ready() {
+  crictl pods --state ready -q 2>/dev/null | grep -c .
+  return 0
+}
+
+ctrs_running() {
+  crictl ps --state running -q 2>/dev/null | grep -c .
+  return 0
+}
+
 for i in $(seq 1 30); do
   ready=$(ctrs_running)
   printf 't=%3ds sandboxes_ready=%s containers_running=%s | %s\n' \
     "$((i * 3))" "$(pods_ready)" "$ready" \
     "$(grep -oE 'E[0-9]{4} .*' "$LOG/kubelet.log" 2>/dev/null | tail -1 | cut -c1-100)"
-  [ "$ready" -ge 2 ] && break
+  [[ "$ready" -ge 2 ]] && break
   sleep 3
 done
 
@@ -91,7 +105,7 @@ say "crictl ps -a"; crictl ps -a 2>&1
 say "CNI: pod IP from the configured pod network"
 POD_CIDR_PREFIX=$(sed -nE 's/.*"subnet": "([0-9]+\.[0-9]+)\..*/\1/p' /etc/cni/net.d/10-bridge.conf)
 POD_IP=$(grep -oE "$POD_CIDR_PREFIX\.[0-9]+\.[0-9]+" "$LOG/kubelet.log" | sort -u | head -1)
-if [ -n "$POD_IP" ]; then
+if [[ -n "$POD_IP" ]]; then
   echo "ok: CNI bridge allocated $POD_IP"
 else
   echo "WARNING: no address from ${POD_CIDR_PREFIX}.0.0/16 seen -- CNI may not have run"
@@ -99,9 +113,9 @@ fi
 
 say "verdict"
 ready=$(ctrs_running)
-if [ "$ready" -ge 2 ]; then
+if [[ "$ready" -ge 2 ]]; then
   echo "PASS: both static pods running (hostNetwork + CNI)"; RC=0
-elif [ "$ready" -ge 1 ]; then
+elif [[ "$ready" -ge 1 ]]; then
   echo "PARTIAL: $ready/2 containers running"; RC=2
 else
   echo "FAIL: no containers reached Running"; RC=1

@@ -76,7 +76,7 @@ say "containerd config vs containerd $CONTAINERD_VERSION"
 # Unknown or renamed keys are reported on stderr as warnings, not as a failure,
 # so treat any stderr output as a finding.
 CTR_ERR=$("$BIN/containerd" -c "$WORK/etc/containerd-config.toml" config dump 2>&1 >/dev/null)
-if [ -z "$CTR_ERR" ]; then
+if [[ -z "$CTR_ERR" ]]; then
   echo "containerd-config.toml.j2               ok"
   CTR_RC=0
 else
@@ -87,8 +87,8 @@ fi
 
 say "result"
 RC=0
-[ "$FLAGS_RC" -ne 0 ] && { echo "FAIL: removed flags found"; RC=1; }
-[ "$CONF_RC" -ne 0 ] && { echo "FAIL: a kubelet config was rejected"; RC=1; }
-[ "$CTR_RC" -ne 0 ] && { echo "FAIL: containerd config findings"; RC=1; }
-[ "$RC" -eq 0 ] && echo "PASS: flags and configs are clean for k8s $K8S_VERSION"
+[[ "$FLAGS_RC" -ne 0 ]] && { echo "FAIL: removed flags found"; RC=1; }
+[[ "$CONF_RC" -ne 0 ]] && { echo "FAIL: a kubelet config was rejected"; RC=1; }
+[[ "$CTR_RC" -ne 0 ]] && { echo "FAIL: containerd config findings"; RC=1; }
+[[ "$RC" -eq 0 ]] && echo "PASS: flags and configs are clean for k8s $K8S_VERSION"
 exit "$RC"

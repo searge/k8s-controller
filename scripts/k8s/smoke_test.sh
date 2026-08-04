@@ -17,7 +17,7 @@ BASE_IMAGE=${BASE_IMAGE:-docker.io/library/debian:trixie-slim}
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT="$WORK/out"
 
-[ "$(id -u)" -eq 0 ] || die "must run as root: sudo bash $0"
+[[ "$(id -u)" -eq 0 ]] || die "must run as root: sudo bash $0"
 
 load_versions
 say "versions under test"
