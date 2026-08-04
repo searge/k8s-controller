@@ -1,0 +1,10 @@
+misconfigurations:
+  - id: AVD-KSV-0009
+    paths:
+      - "scripts/k8s/manifests/host_network.yaml"
+    statement: >-
+      hostNetwork is the point of this smoke-test fixture: it is how the test
+      separates a containerd/runc failure from a CNI failure. The manifest is
+      only ever fed to a throwaway kubelet by scripts/k8s/smoke_test.sh and is
+      never deployed to a real cluster. Scoped to this one path so a real
+      workload setting hostNetwork still gets flagged.

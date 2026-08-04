@@ -1,4 +1,13 @@
 # Exercises containerd + runc only -- hostNetwork skips CNI entirely.
+#
+# hostNetwork is the whole point of this fixture: it is how the smoke test
+# separates a containerd/runc failure from a CNI failure. Scanners flag it, so
+# the finding is suppressed rather than "fixed" -- removing it would delete the
+# test's reason to exist. Nothing here is ever deployed to a real cluster.
+#
+# Suppressed in .trivyignore / .trivyignore.yaml. Trivy's inline
+# `# trivy:ignore:` comments do not work for Kubernetes manifests -- verified
+# against 0.73.0, in every placement -- so do not add one here expecting it to.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -6,9 +15,28 @@ metadata:
   name: host-network
   namespace: default
 spec:
-  hostNetwork: true
+  hostNetwork: true # NOSONAR -- intentional, see header comment
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: c
       image: docker.io/library/busybox:latest
       imagePullPolicy: IfNotPresent
       command: ["sh", "-c", "sleep 3600"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 100m
+          memory: 32Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]

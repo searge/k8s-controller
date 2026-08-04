@@ -1,0 +1,17 @@
+# Plain-format ignores. Trivy auto-detects this file with no extra flags, which
+# is why it exists -- hosted scanners (Codacy) invoke Trivy themselves and we
+# cannot pass --ignorefile to them.
+#
+# LIMITATION: this format matches by rule ID only, with no path scoping. The
+# path-scoped rationale lives in .trivyignore.yaml, which Trivy 0.73 reads only
+# when given `--ignorefile .trivyignore.yaml` explicitly:
+#
+#   trivy fs --scanners misconfig --ignorefile .trivyignore.yaml .
+#
+# Keep the two in sync. If a real workload ever needs hostNetwork, drop the line
+# below so it gets flagged, and rely on the scoped file locally.
+
+# hostNetwork in scripts/k8s/manifests/host_network.yaml -- the fixture exists to
+# separate a containerd/runc failure from a CNI failure in smoke_test.sh. Never
+# deployed to a real cluster.
+AVD-KSV-0009

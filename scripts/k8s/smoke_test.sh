@@ -9,6 +9,7 @@
 # and kubelet additionally dies on `open /dev/kmsg` inside a user namespace.
 set -uo pipefail
 
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 
