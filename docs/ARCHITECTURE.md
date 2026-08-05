@@ -40,19 +40,32 @@ invocation.
 
 ## Where it is going
 
-```text
-user -> cmd (Cobra) -> internal/backup  ---------> Kubernetes API (dynamic + typed)
-                                                     ^
-signal -> cmd serve -> root context                  |
-|  |
-                          +-> internal/informer -> shared cache
-|  |
-                          +-> pkg/server  <----------+  (handlers read cache, never the API)
-                          |
-                          +-> manager (controller-runtime)
-                                 |
-                                 +-> reconciler -> CR status + metrics
-                                 +-> leader election lease
+```mermaid
+C4Container
+    title Target architecture, after milestone 5
+
+    Person(operator, "Operator", "Runs the CLI, reads the report, gets paged")
+
+    System_Boundary(app, "k8s-controller") {
+        Container(cli, "CLI", "Go, Cobra", "One-shot commands such as backup-report")
+        Container(informer, "Informer", "Go, client-go", "Watches PVCs and Longhorn resources")
+        Container(cache, "Shared cache", "Go, client-go", "The only read path for handlers and reconcilers")
+        Container(server, "HTTP server", "Go, FastHTTP", "healthz, readyz, JSON endpoints")
+        Container(manager, "Manager", "Go, controller-runtime", "Reconciler, leader election, metrics")
+    }
+
+    System_Ext(k8s, "Kubernetes API", "PVCs, PVs, Longhorn custom resources")
+    System_Ext(prom, "Prometheus", "Scrapes the metrics and owns the alerting")
+
+    Rel(operator, cli, "Runs")
+    Rel(cli, k8s, "Reads directly, one shot, no cache")
+    Rel(informer, k8s, "Watches")
+    Rel(informer, cache, "Populates")
+    Rel(server, cache, "Reads")
+    Rel(manager, cache, "Reads")
+    Rel(manager, k8s, "Writes its own CR status, nothing else")
+    Rel(prom, manager, "Scrapes")
+    Rel(prom, operator, "Alerts")
 ```
 
 The single structural change that unlocks the rest: a root context owned by `serve`, with the
