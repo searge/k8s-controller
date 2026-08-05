@@ -10,198 +10,104 @@ My implementation of the Golang Kubernetes Controller course from FWDays.
 
 ## About
 
-This project follows [the step-by-step tutorial](https://github.com/den-vasyliev/k8s-controller-tutorial-ref) for building production-grade Kubernetes controllers in Go. Each step is implemented as a separate commit/branch with detailed explanations.
+A learning project built alongside the [FWDays crash course on Kubernetes
+controllers](https://fwdays.com/event/kubernetes-controllers-course), taught by @den-vasyliev and
+@Alex0M. The course ships a [reference
+implementation](https://github.com/den-vasyliev/k8s-controller-tutorial-ref) in ten step branches;
+this repository works through the same steps against a different resource set, so that the
+finished thing has a reason to keep running.
 
-**Course**: [Crash Course: Kubernetes controllers](https://fwdays.com/event/kubernetes-controllers-course)
-**Instructors**: @den-vasyliev (Principal SRE), @Alex0M (Senior Platform Engineer)
+**Step 6 of 10.** The CLI, structured logging, the HTTP server and `list deployments` through
+client-go all work. Informers, reconciliation and controller-runtime are not started yet.
+
+## Documentation
+
+Start at [docs/README.md](docs/README.md). It carries the reading order and explains what is
+deliberately kept out of this repository.
+
+| Document | What is in it |
+| --- | --- |
+| [docs/COURSE.md](docs/COURSE.md) | Which course steps are done, and where this diverges from the reference implementation |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones, effort estimates, known defects left unfixed on purpose |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Current and target layout, package boundaries, testing strategy |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Numbered decisions with reasoning and rejected alternatives |
+| [docs/backup-check.md](docs/backup-check.md) | First domain: Longhorn object graph, the join, what the assertion does not claim |
+| [docs/api.md](docs/api.md) | HTTP endpoints and CLI commands as they exist today |
+| [docs/CODING_GUIDELINES.md](docs/CODING_GUIDELINES.md) | Rules, quick reference |
+| [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md) | The same rules with worked examples |
 
 ## Quick Start
 
-### Prerequisites
-
-- **Go 1.26+** - [Installation guide](https://golang.org/doc/install)
-- **Taskfile** - [Installation guide](https://taskfile.dev/installation/)
-- **Podman** - [Installation guide](https://podman.io/getting-started/installation)
-- **Docker** (optional) - Alternative to Podman
-
-Nothing installed locally? Use
-[Dev Container / Codespaces](#dev-container--codespaces) instead.
-
-### One-Command Setup
-
-Get a complete Kubernetes development environment running in seconds:
+You need [Go 1.26+](https://golang.org/doc/install) and
+[Taskfile](https://taskfile.dev/installation/). For the cluster, either
+[Podman](https://podman.io/getting-started/installation) or Docker will do. If you would rather
+not install any of it, skip to [Dev Container / Codespaces](#dev-container--codespaces).
 
 ```bash
-# Clone the repository
 git clone https://github.com/Searge/k8s-controller.git
 cd k8s-controller
 
-# Initialize Podman machine and provision Kubernetes cluster
+# Create the Podman machine and provision Kubernetes inside it
 task init && task ssh -- 'cd /srv/app && go-task provision'
 
-# Access your cluster
+# Use the cluster
 task ssh
 kubectl get nodes
-kubectl get all -A
 ```
 
-This automated setup creates:
-
-- Podman machine with Fedora CoreOS
-- Complete single-node Kubernetes cluster (v1.36.2)
-- All control plane components (etcd, API server, scheduler, controller-manager)
-- Kubelet with containerd runtime
-- CNI networking with bridge plugin
-- PKI infrastructure with auto-generated certificates
+That gives you a Podman machine running Fedora CoreOS with a single-node Kubernetes v1.36.2
+cluster inside it: etcd, API server, scheduler and controller-manager, kubelet on containerd, CNI
+bridge networking, and a generated PKI. The Ansible that does all of this, including the tags for
+running only part of it and where to look when it breaks, is documented in
+[ansible/README.md](ansible/README.md).
 
 ### Dev Container / Codespaces
 
-The same cluster runs inside a Dev Container, so no Podman machine is needed.
-Open the repository in VS Code (*Reopen in Container*) or in
+The same cluster runs inside a Dev Container, so no Podman machine is needed. Open the repository
+in VS Code (*Reopen in Container*) or in
 [GitHub Codespaces](https://github.com/features/codespaces), then:
 
 ```bash
-# Install the binaries, generate the PKI and write the config files
-task devcontainer
-
-# Start containerd, etcd, the control plane components and kubelet
-task devcontainer-run
-
-# Use the cluster
+task devcontainer      # install the binaries, generate the PKI, write the configs
+task devcontainer-run  # start containerd, etcd, the control plane and kubelet
 kubectl get nodes
-kubectl get all -A
 ```
 
-Two helpers are placed in the container home directory:
+Two helpers land in the container home directory: `~/k8s-status.sh` reports the state of every
+component and `~/k8s-stop.sh` stops the control plane. Both paths read the same
+`ansible/group_vars/all.yml`, so versions, CIDRs and paths match the Podman setup.
+
+## Tasks
+
+`task` on its own lists everything. The ones worth knowing:
 
 ```bash
-~/k8s-status.sh   # state of every component
-~/k8s-stop.sh     # stop the control plane
+task dev          # format, lint, test, build
+task test-watch   # tests in watch mode
+task docker-build # build the container image
+
+task init         # create and set up the Podman machine
+task ssh          # shell into it
+task provision    # run the Ansible provisioning
+task reboot       # restart the machine
+task rm           # delete the machine
 ```
 
-Both playbooks read the same `ansible/group_vars/all.yml` as `provision.yml`,
-so versions, CIDRs and paths match the Podman/Docker environment.
+## Layout
 
-## Development Environment
-
-The project includes a fully automated Kubernetes cluster setup for realistic controller development and testing. See [ansible/README.md](ansible/README.md) for detailed information about:
-
-- Automated cluster provisioning
-- Component configuration
-- Available Ansible tags for selective deployment
-- Troubleshooting and logging
-
-### Available Tasks
-
-The project uses [Taskfile](https://taskfile.dev/) for task automation:
-
-```bash
-# View all available tasks
-task
-
-# Development workflow
-task dev          # Format, lint, test, build
-task test-watch   # Run tests in watch mode
-task docker-build # Build Docker image
-
-# Environment management
-task init         # Create and setup Podman machine
-task ssh          # SSH into the machine
-task provision    # Run Ansible provisioning
-task reboot       # Restart the machine
-task rm           # Remove the machine
-
-# Dev Container / Codespaces
-task devcontainer     # Install K8s components into the devcontainer
-task devcontainer-run # Start the control plane inside the devcontainer
+```text
+ansible/        cluster provisioning (see ansible/README.md)
+cmd/            CLI commands
+docs/           project documentation (start at docs/README.md)
+internal/       application internals: domain logic, informers, controllers
+notebooks/      Go learning notebooks
+pkg/            client-go access, logging, HTTP server
+scripts/        release tooling, smoke tests, Podman machine setup
+.devcontainer/  Dev Container and Codespaces definition
 ```
 
-## Progress
+Package boundaries and where each of those is going: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-- [x] **Foundation**
-  - [x] Golang CLI Application using Cobra
-  - [x] Structured logging with zerolog
-  - [x] HTTP server with FastHTTP
-  - [x] Comprehensive testing suite
-  - [x] Quality assurance with linters
-  - [x] Development environment automation
-  - [x] Documentation and examples
+## License
 
-- [ ] **Kubernetes Integration** (In Progress)
-  - [x] List Kubernetes Deployments with client-go
-  - [ ] Deployment Informer with client-go
-  - [ ] JSON API Endpoint for deployments
-  - [ ] controller-runtime Deployment Controller
-  - [ ] Leader Election and Metrics
-
-- [ ] **Advanced Features** (Future)
-  - [ ] Custom Resource (FrontendPage CRD)
-  - [ ] Platform API (CRUD + Swagger)
-  - [ ] JWT Authentication
-  - [ ] OpenTelemetry Instrumentation
-  - [ ] Helm Charts and GitOps
-
-## Architecture
-
-```mermaid
-C4Container
-    title Kubernetes Controller Architecture
-
-    Person(user, "DevOps Engineer", "Uses CLI")
-
-    System_Boundary(app, "Controller Application") {
-        Container(cli, "CLI Client", "Go, Cobra", "Command line interface")
-        Container(server, "HTTP Server", "Go, FastHTTP", "REST API and UI")
-        Container(controller, "Controller", "Go, controller-runtime", "Reconciliation logic")
-        Container(informers, "Informers", "Go, client-go", "Watch and cache")
-    }
-
-    System_Ext(k8s, "Kubernetes API", "Manages cluster resources")
-
-    Rel(user, cli, "Uses")
-    Rel(cli, server, "Commands")
-    Rel(server, k8s, "API calls")
-    Rel(k8s, informers, "Events")
-    Rel(informers, controller, "Cached data")
-    Rel(controller, k8s, "Reconcile")
-```
-
-## Project Structure
-
-```bash
-├── .devcontainer/            # Dev Container / Codespaces definition
-├── ansible/                  # Kubernetes cluster automation
-│   ├── README.md             # Detailed Ansible documentation
-│   ├── group_vars/           # Shared vars: versions, CIDRs, paths
-│   ├── init.yml              # Initial system setup
-│   ├── provision.yml         # Main K8s provisioning (Podman VM)
-│   ├── devcontainer.yml      # Install K8s into a devcontainer
-│   ├── devcontainer-run.yml  # Run K8s inside a devcontainer
-│   └── templates/            # Service and config templates
-├── cmd/                      # CLI application code
-├── notebooks/                # Go learning notebooks
-├── scripts/
-│   ├── ci/                   # Release tooling
-│   ├── k8s/                  # Runtime smoke tests (see scripts/k8s/README.md)
-│   └── vm/                   # Podman machine setup
-├── Taskfile.yaml             # Task automation
-├── Dockerfile                # Container image definition
-└── README.md                 # This file
-```
-
-## 📚 Documentation
-
-- **[API Documentation](docs/api.md)** - HTTP endpoints and CLI commands
-
-## 🔗 Resources
-
-- **Course**: [Kubernetes Controllers Crash Course](https://fwdays.com/event/kubernetes-controllers-course)
-- **Reference**: [Tutorial Reference Implementation](https://github.com/den-vasyliev/k8s-controller-tutorial-ref)
-- **Go Style**: [Google Go Style Guide](https://google.github.io/styleguide/go/guide)
-- **Kubernetes**: [client-go Documentation](https://pkg.go.dev/k8s.io/client-go)
-
-## 📄 License
-
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-
-**Built with ❤️ by [@Searge](https://github.com/Searge)**
+GNU General Public License v3.0. See [LICENSE](LICENSE).
