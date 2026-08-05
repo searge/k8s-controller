@@ -2,6 +2,59 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.2] - 2026-08-05
+
+### 🚀 Features
+
+- *(task)* Add devcontainer and devcontainer-run tasks
+
+### 🐛 Bug/Lint Fixes
+
+- *(devcontainer)* Make pods runnable in codespaces
+- *(devcontainer)* Add `use_local_image_pull`
+- *(devcontainer)* Use python base image, drop ansible feature
+- *(ansible)* Get envtest binaries from controller-tools releases
+- *(ansible)* Get envtest binaries from controller-tools releases in provision
+- *(coderabbit)* Nest tools under reviews
+- *(ansible)* Make the pause image pre-pull idempotent
+- *(scripts)* Update to pass warnings
+- *(scripts)* Get rid of sonar issues
+- *(security)* Close scanner findings and a dead action reference
+- *(security)* Fix run-block injection, lock notebook deps
+- *(security)* Harden workflows, upload trivy SARIF, build from the tag
+- *(scripts)* Resolve the project root with git
+
+### 🚜 Refactor
+
+- *(ci)* Trigger Release on the tag and call Security Checks
+
+### 📚 Documentation
+
+- *(readme)* Document the devcontainer workflow
+- *(ansible)* Document devcontainer playbooks and shared vars
+- *(devcontainer)* Route the setup through Task
+- *(readme)* Fix the devcontainer command comments
+- *(ansible)* Fix command comments and complete the tag list
+
+### 🎨 Styling
+
+- *(scripts)* Apply the repo's shell rules to init.sh and release.sh
+
+### ⚙️ Miscellaneous Tasks
+
+- *(devcontainer)* Drop the unused zsh-plugins feature
+- *(github)* Make @searge the only code owner
+- *(mergify)* Require green static analysis before auto-merge
+- Realign pins to Go 1.26 and k8s 1.36
+- *(scripts)* Regroup and add k8s smoke tests
+- *(scripts)* Add NOSONAR for die
+
+### Deps
+
+- *(deps)* Bump the updates group across 1 directory with 4 updates
+- *(deps)* Bump k8s.io/api from 0.35.0 to 0.35.3
+- *(deps)* Bump golang.org/x/net from 0.50.0 to 0.55.0
+
 ## [0.6.1] - 2026-01-10
 
 ### 🐛 Bug/Lint Fixes
