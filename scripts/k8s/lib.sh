@@ -2,6 +2,10 @@
 # Shared helpers: version discovery, downloads, template rendering.
 # Sourced by check_flags.sh and smoke_test.sh.
 
+# Path arithmetic rather than `git rev-parse --show-toplevel`, unlike the other
+# scripts here: smoke_test.sh runs under sudo, and git refuses to operate on a
+# repository owned by another user ("dubious ownership") without safe.directory.
+# The trade-off is that this breaks if the file moves to a different depth.
 REPO_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 GROUP_VARS="$REPO_ROOT/ansible/group_vars/all.yml"
 TEMPLATES="$REPO_ROOT/ansible/templates"

@@ -6,7 +6,10 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" &> /dev/null && pwd)
-PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
+# Ask git rather than counting directories up: this script has already moved once
+# (scripts/ -> scripts/ci/), and a hardcoded number of `dirname` calls silently
+# resolves to the wrong root, which here means writing CHANGELOG.md into scripts/.
+PROJECT_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)
 cd "$PROJECT_ROOT"
 
 # Colors for output

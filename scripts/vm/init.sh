@@ -5,8 +5,10 @@ set -e
 
 # Get the absolute path to the directory where the script is located.
 SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" &> /dev/null && pwd)
-# The project root is one level above the script's directory.
-PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
+# Ask git for the project root rather than counting directories up: this script
+# has already moved once (scripts/ -> scripts/vm/), and getting this wrong makes
+# `podman machine init --volume ./:/srv/app` mount the wrong directory.
+PROJECT_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)
 # Change the current working directory to the project root.
 cd "$PROJECT_ROOT"
 
