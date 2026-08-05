@@ -35,8 +35,15 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+    # No `patterns` on purpose: without it the group matches every dependency
+    # and `update-types` is the only filter. `patch` has to be listed --
+    # `[minor]` alone dropped patch bumps out of the group, so k8s.io/api,
+    # k8s.io/apimachinery and k8s.io/client-go 0.36.0 -> 0.36.3 arrived as three
+    # separate PRs even though they are one release train. `major` is left out so
+    # breaking bumps still come in one PR each.
     groups:
       updates:
         applies-to: "version-updates"
         update-types:
           - "minor"
+          - "patch"
