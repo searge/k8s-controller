@@ -55,23 +55,32 @@ commit_preprocessors = [
   #{ pattern = '.*', replace_command = 'typos --write-changes -' },
 ]
 # regex for parsing and grouping commits
+# The `<!-- NN -->` prefix only orders the sections -- the body template pipes the
+# group through `striptags`, so it never reaches CHANGELOG.md. Indices are
+# zero-padded because git-cliff sorts these as strings: with single digits,
+# adding a tenth group would sort `<!-- 10 -->` between 1 and 2.
 commit_parsers = [
-  { message = "^feat|^:sparkles:", group = "<!-- 0 -->🚀 Features" },
-  { message = "^fix|^:pencil2:|^:rotating_light:", group = "<!-- 1 -->🐛 Bug/Lint Fixes" },
-  { message = "^doc|^:memo:|^:page_facing_up:", group = "<!-- 3 -->📚 Documentation" },
-  { message = "^perf", group = "<!-- 4 -->⚡ Performance" },
-  { message = "^refactor|^:recycle:|^:truck:", group = "<!-- 2 -->🚜 Refactor" },
-  { message = "^style|^:art:", group = "<!-- 5 -->🎨 Styling" },
-  { message = "^test", group = "<!-- 6 -->🧪 Testing" },
+  { message = "^feat|^:sparkles:", group = "<!-- 00 -->🚀 Features" },
+  { message = "^fix|^:pencil2:|^:rotating_light:", group = "<!-- 01 -->🐛 Bug/Lint Fixes" },
+  { message = "^doc|^:memo:|^:page_facing_up:", group = "<!-- 03 -->📚 Documentation" },
+  { message = "^perf", group = "<!-- 04 -->⚡ Performance" },
+  { message = "^refactor|^:recycle:|^:truck:", group = "<!-- 02 -->🚜 Refactor" },
+  { message = "^style|^:art:", group = "<!-- 05 -->🎨 Styling" },
+  { message = "^test", group = "<!-- 06 -->🧪 Testing" },
   { message = "^chore\\(release\\): prepare for", skip = true },
   { message = "^chore\\(deps.*\\)", skip = true },
   { message = "^chore\\(pr\\)", skip = true },
   { message = "^chore\\(pull\\)", skip = true },
-  { message = "^dep:", skip = true },
+  # dependabot is configured with `prefix: "deps"`, so its commits arrive as
+  # `deps(deps): bump ...`. The rule here used to be `^dep:`, which matches
+  # nothing at all -- there is no `dep` type and `deps:` has an `s` before the
+  # colon -- so those commits fell through to an unnamed `Deps` section. Must
+  # stay above `^chore|^ci`: the first matching parser wins.
+  { message = "^deps", group = "<!-- 07 -->📦 Dependencies" },
   { message = "^Merge", skip = true },
-  { message = "^chore|^ci|^:rocket:|^:construction:|^:bookmark:", group = "<!-- 7 -->⚙️ Miscellaneous Tasks" },
-  { body = ".*security", group = "<!-- 8 -->🛡️ Security" },
-  { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
+  { message = "^chore|^ci|^:rocket:|^:construction:|^:bookmark:", group = "<!-- 08 -->⚙️ Miscellaneous Tasks" },
+  { body = ".*security", group = "<!-- 09 -->🛡️ Security" },
+  { message = "^revert", group = "<!-- 10 -->◀️ Revert" },
 ]
 # protect breaking changes from being skipped due to matching a skipping commit_parser
 protect_breaking_commits = false

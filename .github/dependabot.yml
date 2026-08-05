@@ -1,15 +1,30 @@
 version: 2
 updates:
-  # Maintain dependencies for GitHub Actions
+  # Maintain dependencies for GitHub Actions.
+  #
+  # `directory` must be "/" here: the docs say dependabot searches
+  # `.github/workflows` and a root `action.yml` relative to it, so the
+  # previous "/.github" was not the documented form. Whatever it did, this
+  # block's settings were not being honoured -- the only actions bumps that
+  # ever arrived were `chore(deps)` in an auto-named `github_actions` group,
+  # not `ci(deps)` as configured. Monthly on top of that let three major
+  # versions of actions/checkout pile up unnoticed.
   - package-ecosystem: "github-actions"
-    directory: "/.github"
+    directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+      day: "monday"
     labels:
       - "github-actions"
+    # Same prefix as gomod below so both land in the changelog's Dependencies
+    # section; cliff.toml matches on `^deps`.
     commit-message:
-      prefix: "ci"
+      prefix: "deps"
       include: "scope"
+    groups:
+      actions:
+        patterns:
+          - "*"
 
   # Maintain dependencies for Golang
   - package-ecosystem: "gomod"
