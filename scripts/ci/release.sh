@@ -16,15 +16,21 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    local msg="$1"
+    echo -e "${BLUE}[INFO]${NC} $msg"
+    return 0
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    local msg="$1"
+    echo -e "${GREEN}[SUCCESS]${NC} $msg"
+    return 0
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    local msg="$1"
+    echo -e "${YELLOW}[WARNING]${NC} $msg"
+    return 0
 }
 
 # Check if git-cliff is installed
@@ -67,7 +73,7 @@ if git cliff --bump --output CHANGELOG.md; then
     # Extract the new version from the generated changelog
     next_version=$(head -10 CHANGELOG.md | grep -oE '\[([0-9]+\.[0-9]+\.[0-9]+)\]' | head -1 | tr -d '[]')
 
-    if [ -n "$next_version" ]; then
+    if [[ -n "$next_version" ]]; then
         next_version="v${next_version}"
         log_info "Next version will be: $next_version"
 
