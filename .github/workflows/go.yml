@@ -17,8 +17,11 @@ on:
       - 'cmd/**'
       - 'pkg/**'
 
-env:
-  go-version: 1.26
+# No `go-version` here on purpose: setup-go reads go.mod instead. From v6 the
+# action sets GOTOOLCHAIN=local, so a `go-version` that resolves lower than
+# go.mod's `go` directive no longer silently downloads the newer toolchain --
+# it fails with `go.mod requires go >= X (running go Y; GOTOOLCHAIN=local)`.
+# Reading go.mod keeps the two from drifting apart.
 
 # No workflow-level permissions: each job asks for what it needs, so a job that
 # only reads the checkout cannot write to the repo. `actions: write` and
@@ -32,7 +35,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Find Test Dirs
@@ -58,13 +61,13 @@ jobs:
       matrix:
         dir: ${{fromJson(needs.find-test-dirs.outputs.dirs)}}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.go-version }}
+          go-version-file: go.mod
           cache-dependency-path: "./go.mod"
       - name: Test
         env:
@@ -82,20 +85,21 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # default fetch-depth is insufficent to find previous coverage notes
           fetch-depth: 10
           # Deliberately NOT persist-credentials: false, unlike every other
           # checkout here. go-coverage-action pushes refs/notes/gocoverage using
-          # the credentials checkout leaves in .git/config; dropping them breaks
-          # it with `git push origin refs/notes/gocoverage` exit code 128.
-          # Suppressed for this one step in .github/zizmor.yml.
-          persist-credentials: true
+          # the credentials checkout leaves behind; dropping them breaks it with
+          # `git push origin refs/notes/gocoverage` exit code 128. Since
+          # checkout v6 those credentials live in a file under $RUNNER_TEMP
+          # rather than in .git/config, which git picks up transparently.
+          persist-credentials: true # zizmor: ignore[artipacked]
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.go-version }}
+          go-version-file: go.mod
           cache-dependency-path: "./go.mod"
       - name: Go Coverage Report
         id: coverage
