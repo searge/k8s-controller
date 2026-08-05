@@ -17,7 +17,7 @@ VM_NAME="dev"
 APP_DIR="/srv/app"
 
 # Check if we're running in a devcontainer
-if [ -n "${REMOTE_CONTAINERS}" ] || [ -n "${CODESPACES}" ] || [ -f "/.dockerenv" ]; then
+if [[ -n "${REMOTE_CONTAINERS}" ]] || [[ -n "${CODESPACES}" ]] || [[ -f "/.dockerenv" ]]; then
     echo "--- Detected devcontainer environment ---"
     DEVCONTAINER_MODE=true
 else
@@ -25,7 +25,7 @@ else
     DEVCONTAINER_MODE=false
 fi
 
-if [ "$DEVCONTAINER_MODE" = true ]; then
+if [[ "$DEVCONTAINER_MODE" == true ]]; then
     echo "--- Setting up devcontainer environment ---"
 
     # Install additional tools if needed
