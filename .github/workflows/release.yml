@@ -1,39 +1,56 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["Security Checks"]
-    types:
-      - completed
+  push:
+    tags:
+      - 'v*.*.*'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-permissions:
-  contents: write
-  packages: write
+# No workflow-level permissions: only build-docker needs to write packages and
+# only create-release needs to write contents.
+permissions: {}
 
 jobs:
-  # Simple check: if security passed, we can release
-  check-security:
+  # Build the image and scan it. Nothing below runs unless this passes.
+  security:
+    uses: ./.github/workflows/security.yml
+    permissions:
+      # A called workflow cannot exceed what the calling job grants, so these
+      # mirror the permissions its own job asks for.
+      contents: read
+      security-events: write
+
+  # Refuse to release from anything that is not a plain vN.N.N tag. The trigger
+  # already filters on v*.*.*, but that glob also matches e.g. v1.2.3-rc$(id),
+  # and the value ends up in a Docker tag and a release name.
+  check-tag:
+    needs: security
     runs-on: ubuntu-24.04
-    if: github.event.workflow_run.conclusion == 'success'
+    permissions: {}
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Extract version from branch
+      - name: Validate the release tag
         id: version
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          # Security workflow only runs on tags, so head_branch is always a tag
-          version="${{ github.event.workflow_run.head_branch }}"
-          echo "version=${version}" >> $GITHUB_OUTPUT
-          echo "✅ Security checks passed for: ${version}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::refusing to release from unexpected tag: $TAG"
+            exit 1
+          fi
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "✅ Security checks passed for: $TAG"
 
   # Build binaries for multiple platforms
   build-binaries:
-    needs: check-security
+    needs: check-tag
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     strategy:
       matrix:
         include:
@@ -63,24 +80,31 @@ jobs:
             arch: amd64
             ext: ".exe"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
-          cache-dependency-path: "./go.mod"
+          # Cache disabled: this workflow publishes release binaries, so a
+          # poisoned cache entry written by a lower-privileged run could end up
+          # compiled into them. Costs a cold module download per matrix leg.
+          cache: false
 
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+          VERSION: ${{ needs.check-tag.outputs.version }}
+          EXT: ${{ matrix.ext }}
         run: |
           mkdir -p dist
           go build -v \
-            -ldflags "-w -s -X=github.com/Searge/k8s-controller/cmd.Version=${{ needs.check-security.outputs.version }}" \
-            -o dist/kc${{ matrix.ext }} \
+            -ldflags "-w -s -X=github.com/Searge/k8s-controller/cmd.Version=${VERSION}" \
+            -o "dist/kc${EXT}" \
             main.go
 
       - name: Create archive
@@ -95,23 +119,28 @@ jobs:
           ls -la kc.*
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: kc-${{ matrix.platform }}-${{ matrix.arch }}
           path: kc.${{ matrix.platform }}.${{ matrix.arch }}.*
 
   # Build and push Docker images
   build-docker:
-    needs: check-security
+    needs: check-tag
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write   # pushes the image to ghcr.io
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -119,10 +148,10 @@ jobs:
 
       - name: Generate Docker tags
         id: meta
+        env:
+          VERSION: ${{ needs.check-tag.outputs.version }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         run: |
-          VERSION="${{ needs.check-security.outputs.version }}"
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-
           # Generate tags manually
           TAGS="${IMAGE}:${VERSION}"
           TAGS="${TAGS},${IMAGE}:latest"
@@ -137,11 +166,11 @@ jobs:
             TAGS="${TAGS},${IMAGE}:${MAJOR}"
           fi
 
-          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
           echo "Generated tags: ${TAGS}"
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -149,20 +178,24 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ needs.check-security.outputs.version }}
+            VERSION=${{ needs.check-tag.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   # Create GitHub Release with all artifacts
   create-release:
     runs-on: ubuntu-24.04
-    needs: [check-security, build-binaries, build-docker]
+    needs: [check-tag, build-binaries, build-docker]
+    permissions:
+      contents: write   # creates the GitHub release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       # Download all binary artifacts
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: ./artifacts
 
@@ -176,27 +209,35 @@ jobs:
       # Extract changelog
       - name: Extract changelog for this version
         id: changelog
+        env:
+          VERSION: ${{ needs.check-tag.outputs.version }}
         run: |
-          VERSION_NUMBER=$(echo "${{ needs.check-security.outputs.version }}" | sed 's/^v//')
+          VERSION_NUMBER="${VERSION#v}"
           if [ -f "CHANGELOG.md" ]; then
             awk '/^## \['"$VERSION_NUMBER"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > current_changelog.md
             if [ -s current_changelog.md ]; then
-              echo "changelog<<EOF" >> $GITHUB_OUTPUT
-              cat current_changelog.md >> $GITHUB_OUTPUT
-              echo "EOF" >> $GITHUB_OUTPUT
+              # Random delimiter: a changelog line that is literally "EOF" would
+              # otherwise close the value early, truncating the release body or
+              # letting the file inject further step outputs.
+              delimiter="changelog_$(uuidgen)"
+              {
+                echo "changelog<<$delimiter"
+                cat current_changelog.md
+                echo "$delimiter"
+              } >> "$GITHUB_OUTPUT"
             else
-              echo "changelog=No changelog found for version $VERSION_NUMBER" >> $GITHUB_OUTPUT
+              echo "changelog=No changelog found for version $VERSION_NUMBER" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "changelog=No CHANGELOG.md file found" >> $GITHUB_OUTPUT
+            echo "changelog=No CHANGELOG.md file found" >> "$GITHUB_OUTPUT"
           fi
 
       # Create GitHub Release
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ needs.check-security.outputs.version }}
-          name: Release ${{ needs.check-security.outputs.version }}
+          tag_name: ${{ needs.check-tag.outputs.version }}
+          name: Release ${{ needs.check-tag.outputs.version }}
           body: |
             ${{ steps.changelog.outputs.changelog }}
 
@@ -204,7 +245,7 @@ jobs:
 
             **Docker Image:**
             ```bash
-            docker pull ghcr.io/${{ github.repository }}:${{ needs.check-security.outputs.version }}
+            docker pull ghcr.io/${{ github.repository }}:${{ needs.check-tag.outputs.version }}
             ```
 
             **Binary Archives:**
@@ -225,7 +266,7 @@ jobs:
             # Extract kc.windows.amd64.zip and add kc.exe to PATH
             ```
           draft: false
-          prerelease: ${{ contains(needs.check-security.outputs.version, '-') }}
+          prerelease: ${{ contains(needs.check-tag.outputs.version, '-') }}
           files: |
             release-files/*
           generate_release_notes: true
