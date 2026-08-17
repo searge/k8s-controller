@@ -54,7 +54,7 @@ jobs:
         # GitHub. That is worse than an unpinned action: a deleted namespace can
         # be re-registered by anyone, and this workflow can write to the repo and
         # the registry. Replaced with the action maintained by the Task project.
-        uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+        uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
         with:
           version: 3.x
 
@@ -98,7 +98,7 @@ jobs:
       # upload would be skipped on every run that actually found something.
       - name: Upload Trivy results to code scanning
         if: always() && hashFiles('trivy-results.sarif') != ''
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
         with:
           sarif_file: trivy-results.sarif
           category: trivy-image
