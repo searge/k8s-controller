@@ -54,7 +54,7 @@ jobs:
         # GitHub. That is worse than an unpinned action: a deleted namespace can
         # be re-registered by anyone, and this workflow can write to the repo and
         # the registry. Replaced with the action maintained by the Task project.
-        uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2
+        uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
         with:
           version: 3.x
 
@@ -65,7 +65,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       # Build image locally first for security scanning
       - name: Build Docker image for scanning
@@ -98,7 +98,7 @@ jobs:
       # upload would be skipped on every run that actually found something.
       - name: Upload Trivy results to code scanning
         if: always() && hashFiles('trivy-results.sarif') != ''
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: trivy-results.sarif
           category: trivy-image
