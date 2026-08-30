@@ -10,14 +10,18 @@ My implementation of the Golang Kubernetes Controller course from FWDays.
 
 ## About
 
-A learning project built alongside the [FWDays crash course on Kubernetes
-controllers](https://fwdays.com/event/kubernetes-controllers-course), taught by @den-vasyliev and
-@Alex0M. The course ships a [reference
-implementation](https://github.com/den-vasyliev/k8s-controller-tutorial-ref) in ten step branches;
-this repository works through the same steps against a different resource set, so that the
-finished thing has a reason to keep running.
+A read-only tool for asking a Kubernetes cluster questions that are awkward to answer with
+`kubectl`. Every question is a plugin; the plugins that need an API the cluster does not have stay
+silently disabled, so the tool is worth the same in any environment.
 
-**Step 6 of 10.** The CLI, structured logging, the HTTP server and `list deployments` through
+It is also a learning project, and that is the part driving the order of work. It is built
+alongside the [FWDays crash course on Kubernetes
+controllers](https://fwdays.com/event/kubernetes-controllers-course), taught by @den-vasyliev and
+@Alex0M, whose [reference
+implementation](https://github.com/den-vasyliev/k8s-controller-tutorial-ref) runs to fourteen step
+branches. The course's mechanisms are the architecture here; what they are pointed at is different.
+
+**Step 6 of 14.** The CLI, structured logging, the HTTP server and `list deployments` through
 client-go all work. Informers, reconciliation and controller-runtime are not started yet.
 
 ## Documentation

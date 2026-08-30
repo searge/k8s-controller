@@ -16,7 +16,7 @@ reference implementation.
 They are easy to confuse, and earlier notes for this project mixed them.
 
 - **6 lectures** — how the course is delivered.
-- **10 implementation steps** — the `feature/stepN-*` branches in the reference repository. This
+- **14 implementation steps** — the `feature/stepN-*` branches in the reference repository. This
   is the numbering used throughout this repository's documentation.
 
 ## Steps against the code
@@ -29,13 +29,32 @@ They are easy to confuse, and earlier notes for this project mixed them.
 | 4 | `feature/step4-fasthttp-server` | HTTP server | Done — `pkg/server`, `cmd/serve.go` |
 | 5 | `feature/step5-makefile-docker-ci` | Build, container, CI | Done, and then some — Taskfile instead of Make, plus release automation and provisioning that the course does not ask for |
 | 6 | `feature/step6-list-deployments` | client-go, list resources | Done — `pkg/k8s/client.go` |
-| 7 | `feature/step7-informer` | Informer and cache | Not started — [milestone 2](ROADMAP.md#milestone-2--step-7-informer) |
-| 8 | `feature/step8-api-handler` | Serve from cache | Not started — [milestone 3](ROADMAP.md#milestone-3--step-8-api-from-cache) |
-| 9 | `feature/step9-controller-runtime` | Manager, reconciler, CRD | Not started — [milestone 4](ROADMAP.md#milestone-4--step-9-controller-runtime-and-the-backupcheck-resource) |
-| 10 | `feature/step10-leader-election` | Leader election, metrics | Not started — [milestone 5](ROADMAP.md#milestone-5--step-10-leader-election-and-metrics) |
+| 7 | `feature/step7-informer` | Informer and cache | In progress — watches `Deployment`, per decision 014's note on staying unblocked |
+| 8 | `feature/step8-api-handler` | Serve from cache | Not started |
+| 9 | `feature/step9-controller-runtime` | Manager, reconciler | Not started |
+| 10 | `feature/step10-leader-election` | Leader election, metrics | Not started — leader election is required here, not optional (decision 019) |
+| 11 | `feature/step11-frontendpage-crd` | Custom resource and reconcile | Not started — the resource here is `Check`, not `FrontendPage` (decision 019) |
+| 12 | `feature/step12-platform-api` | API layer over the resource | Not started — lands as a Go package, not an HTTP service (decision 015) |
+| 13 | `feature/step13-mcp-integration` | MCP server over the API | Not started — the reference handlers are partly stubs; do not inherit the TODOs |
+| 14 | `feature/step14-jwt-auth` | Authentication on the API | Not started — legitimate because an agent is network-reachable (decision 016) |
 
 Step 5 is where this repository diverged furthest from the course, and decision 013 in
 [DECISIONS.md](DECISIONS.md) is a direct response to that.
+
+## What the course does not teach
+
+Checked against `feature/step14-jwt-auth`, the furthest branch:
+
+- **No status subresource anywhere.** No custom resource in the course has a `status` field, so
+  status conditions are a gap rather than something being replaced (decision 019).
+- **No finalizers.** Zero occurrences. Deliberately left untaught here too (decision 020).
+- **Owner references in one place only.** `SetControllerReference` and `Owns()` appear solely in
+  the `FrontendPage` controller, which is why decision 020 puts owned Jobs behind a plugin that
+  genuinely needs them.
+- **The MCP step is a skeleton.** Its create handler returns a hardcoded stub string.
+
+Worth knowing rather than copying: the final branch commits `coverage.out`, `coverage.xml` and
+`report.xml` into git.
 
 ## Where the milestones diverge from the reference
 

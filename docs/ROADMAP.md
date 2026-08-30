@@ -1,9 +1,21 @@
 # Roadmap
 
+> [!WARNING]
+> **Being rewritten.** The milestones below are built around a Longhorn backup checker as the
+> project's purpose. That premise was overturned on 2026-08-05: see
+> [DECISIONS.md](DECISIONS.md) 014 through 022 for what kc is actually for. Longhorn is now one
+> optional plugin, not the foundation, and there is no `backup-report` command.
+>
+> What survives from below: the informer, cache-sync gating and lifecycle work in milestone 2, and
+> the rule that cleanup belongs to the milestone needing it. What does not: the domain, the
+> ordering, the effort estimates, and the definition of done.
+>
+> Rewritten once the informer work lands, so the new plan is written against code that exists.
+
 Supersedes every earlier plan and progress file for this project. Those described a schedule from
 mid-2025 and a completion percentage that stopped meaning anything.
 
-**Where the code is:** step 6 of 10 — a Cobra CLI, structured logging, an HTTP server, and
+**Where the code is:** step 6 of 14 — a Cobra CLI, structured logging, an HTTP server, and
 `list deployments` through client-go. No informers, no reconciliation, no controller-runtime. See
 [COURSE.md](COURSE.md) for the step-by-step mapping.
 

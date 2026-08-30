@@ -1,5 +1,19 @@
 # BackupCheck
 
+> [!NOTE]
+> **No longer the project's purpose — kept as the design for a future Longhorn plugin.**
+> On 2026-08-05 the project settled on being a general cluster interrogation tool with the course
+> mechanisms as its spine and every question answered by a plugin
+> ([DECISIONS.md](DECISIONS.md) 014). Longhorn is one such plugin, and it is not the first one.
+>
+> The findings below are worth keeping and were verified against a live cluster: the join key trap,
+> the join direction, `status.labels.KubernetesStatus` being history, and the `RecurringJob`
+> `default`-group semantics that make label-driven enrolment wrong. Whoever writes the plugin needs
+> all of it.
+>
+> Ignore the milestone references and the custom resource sketch: the resource is now a generic
+> `Check` whose `spec` names a plugin (decision 019), not a Longhorn-specific type.
+
 The first domain this controller works in. It answers one question about Longhorn-backed
 PersistentVolumeClaims, and the value of the answer depends entirely on how narrowly the
 question is stated.
