@@ -3,11 +3,14 @@
 package logger
 
 import (
+	"io"
 	"os"
 	"strings"
 
+	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"k8s.io/klog/v2"
 )
 
 // Init initializes the global logger with the specified level.
@@ -15,8 +18,16 @@ import (
 // If an invalid level is provided, defaults to info level.
 // The logger is configured to use console output for better readability.
 func Init(level string) {
+	InitWithWriter(level, os.Stderr)
+}
+
+// InitWithWriter is Init with the output destination as a parameter, which is
+// what lets tests capture the log — including the klog bridge below, since
+// zerologr snapshots the logger value when the bridge is installed and a later
+// swap of log.Logger does not re-route klog.
+func InitWithWriter(level string, out io.Writer) {
 	// Configure zerolog to use console writer for better readability
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: out})
 
 	// Set log level
 	switch strings.ToLower(level) {
@@ -35,6 +46,14 @@ func Init(level string) {
 	default:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
+
+	// Route client-go's logging through zerolog. client-go reports its runtime
+	// failures -- a reflector that cannot reach the API server, a cache that will
+	// not sync -- via klog, not via anything this application passes it. Without
+	// this bridge those errors bypass structured logging entirely: a smoke test
+	// against an unreachable cluster produced sixty seconds of silent retries
+	// and a single raw klog line, invisible to anything parsing our output.
+	klog.SetLogger(zerologr.New(&log.Logger))
 
 	log.Debug().Str("level", level).Msg("Logger initialized")
 }

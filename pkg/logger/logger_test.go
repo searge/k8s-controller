@@ -3,10 +3,13 @@ package logger
 
 import (
 	"bytes"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"k8s.io/klog/v2"
 )
 
 // TestInit verifies that the Init function correctly sets the global log level
@@ -125,4 +128,32 @@ func ExampleInit_withInvalidLevel() {
 	logger.Info().Msg("This will be logged at info level")
 
 	// Output:
+}
+
+// TestKlogRoutedThroughZerolog pins the client-go logging bridge: an error
+// reported via klog must land in zerolog's output. Without the bridge, a
+// reflector that cannot reach the API server retries silently and its errors
+// appear only as raw klog text outside structured logging.
+//
+// The writer goes in before initialisation because zerologr snapshots the
+// logger value when the bridge is installed: swapping log.Logger afterwards
+// does not re-route klog. That subtlety is why InitWithWriter exists.
+func TestKlogRoutedThroughZerolog(t *testing.T) {
+	var buf bytes.Buffer
+	InitWithWriter("debug", &buf)
+	defer Init("debug") // restore stderr for other tests
+
+	klog.ErrorS(errors.New("connection refused"), "Unable to sync caches", "controller", "deployments")
+	klog.Flush()
+
+	line := buf.String()
+	if !strings.Contains(line, "Unable to sync caches") {
+		t.Fatalf("klog error did not reach zerolog output: %q", line)
+	}
+	if !strings.Contains(line, "connection refused") {
+		t.Errorf("klog error lost its cause: %q", line)
+	}
+	if !strings.Contains(line, "deployments") {
+		t.Errorf("klog key/value pairs were dropped: %q", line)
+	}
 }

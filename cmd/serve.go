@@ -34,8 +34,9 @@ beside it. Both stop together on SIGINT or SIGTERM. Cluster access is required:
 the command loads a kubeconfig the same way 'list' does.
 
 Endpoints:
-  - GET /health: Health check endpoint returning JSON status
-  - GET /*: Default greeting message for all other paths
+  - GET /healthz: liveness -- the process is up
+  - GET /readyz: readiness -- 200 once the informer cache has synced, 503 before
+  - GET /deployments[?namespace=...]: deployments served from the cache
 
 Examples:
   k8s-controller serve
@@ -84,7 +85,9 @@ func runServe(ctx context.Context, clientset kubernetes.Interface, port int) err
 		return fmt.Errorf("failed to build deployment informer: %w", err)
 	}
 
-	srv := server.New(port, log.Logger)
+	// The watcher is the server's only data source: handlers read the cache and
+	// have no clientset to fall back on, and /readyz gates on its sync state.
+	srv := server.New(port, watcher, log.Logger)
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return watcher.Run(gctx) })

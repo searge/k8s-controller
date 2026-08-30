@@ -22,33 +22,6 @@ import (
 // context is cancelled. Past it, remaining connections are dropped.
 const shutdownTimeout = 5 * time.Second
 
-// createHandler creates an HTTP handler function with the application's routing logic.
-// It accepts a zerolog.Logger for structured logging of HTTP requests and errors.
-// The handler supports the following endpoints:
-//   - GET /health: Returns a JSON health status response
-//   - GET /*: Returns a default greeting message for all other paths
-func createHandler(logger zerolog.Logger) func(ctx *fasthttp.RequestCtx) {
-	return func(ctx *fasthttp.RequestCtx) {
-		path := string(ctx.Path())
-
-		logger.Info().Msgf("Request: %s %s", ctx.Method(), path)
-
-		switch path {
-		case "/health":
-			ctx.SetStatusCode(200)
-			ctx.SetContentType("application/json")
-			if _, err := fmt.Fprintf(ctx, `{"status":"ok"}`); err != nil {
-				logger.Error().Err(err).Msg("Failed to write health response")
-			}
-		default:
-			ctx.SetContentType("text/plain")
-			if _, err := fmt.Fprintf(ctx, "Hello from k8s-controller!"); err != nil {
-				logger.Error().Err(err).Msg("Failed to write response")
-			}
-		}
-	}
-}
-
 // Server is the application's HTTP server with a context-bound lifetime.
 //
 // A Server is single-use: after Start has returned, the underlying fasthttp
@@ -64,13 +37,14 @@ type Server struct {
 	addr net.Addr
 }
 
-// New builds a server for the given port. Port 0 asks the OS for a free port;
-// Addr reports which one was granted once Start has bound it.
-func New(port int, logger zerolog.Logger) *Server {
+// New builds a server for the given port, serving cluster data from source.
+// Port 0 asks the OS for a free port; Addr reports which one was granted once
+// Start has bound it.
+func New(port int, source DeploymentSource, logger zerolog.Logger) *Server {
 	return &Server{
 		port:   port,
 		logger: logger.With().Str("component", "http-server").Logger(),
-		srv:    &fasthttp.Server{Handler: createHandler(logger)},
+		srv:    &fasthttp.Server{Handler: newHandler(source, logger)},
 	}
 }
 

@@ -4,12 +4,16 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -63,13 +67,19 @@ func waitUntil(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timed out waiting for %s", what)
 }
 
-// TestRunServeStopsOnCancel is the milestone's regression test, in three acts:
-// the HTTP server actually answers, the informer actually watches, and one
-// cancellation stops them both — runServe must not return until it has. The
-// first two assertions exist because a runServe that silently dropped either
-// component would still "return cleanly on cancel".
+// TestRunServeStopsOnCancel is the lifecycle regression test, in four acts:
+// the HTTP server answers, readiness follows the informer's sync, the cache
+// actually serves data the informer saw, and one cancellation stops everything
+// — runServe must not return until it has. The middle acts exist because a
+// runServe that silently dropped either component would still "return cleanly
+// on cancel".
 func TestRunServeStopsOnCancel(t *testing.T) {
-	clientset := fake.NewClientset()
+	// The fake clientset is seeded before the informer starts, so the initial
+	// list carries this deployment into the cache.
+	seeded := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "seeded-api"},
+	}
+	clientset := fake.NewClientset(seeded)
 	port := freePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -77,30 +87,51 @@ func TestRunServeStopsOnCancel(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- runServe(ctx, clientset, port) }()
 
-	// Act one: the server answers over real TCP.
-	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
+	base := fmt.Sprintf("http://127.0.0.1:%d", port)
 	client := &http.Client{Timeout: time.Second}
-	waitUntil(t, "the HTTP server to answer /health", func() bool {
-		resp, err := client.Get(url)
+	getStatus := func(path string) (int, string) {
+		resp, err := client.Get(base + path)
 		if err != nil {
-			return false
+			return 0, ""
 		}
 		defer func() { _ = resp.Body.Close() }()
-		return resp.StatusCode == http.StatusOK
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(body)
+	}
+
+	// Act one: liveness answers over real TCP.
+	waitUntil(t, "the HTTP server to answer /healthz", func() bool {
+		status, _ := getStatus("/healthz")
+		return status == http.StatusOK
 	})
 
-	// Act two: the informer is watching. The fake clientset records every call,
-	// so the informer's list-and-watch shows up in the action log.
-	waitUntil(t, "the informer to start watching deployments", func() bool {
-		for _, action := range clientset.Actions() {
-			if action.GetVerb() == "watch" && action.GetResource().Resource == "deployments" {
-				return true
-			}
-		}
-		return false
+	// Act two: readiness turns 200 once the informer has synced.
+	waitUntil(t, "/readyz to report the cache as synced", func() bool {
+		status, _ := getStatus("/readyz")
+		return status == http.StatusOK
 	})
 
-	// Act three: one cancel stops both, and runServe waits for both.
+	// Act three: the cache serves what the informer saw, end to end — fake
+	// clientset through informer through cache through handler to JSON.
+	status, body := getStatus("/deployments")
+	if status != http.StatusOK {
+		t.Fatalf("GET /deployments = %d, want 200 after sync", status)
+	}
+	var list struct {
+		Count int `json:"count"`
+		Items []struct {
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(body), &list); err != nil {
+		t.Fatalf("GET /deployments body is not JSON: %v (%q)", err, body)
+	}
+	if list.Count != 1 || len(list.Items) != 1 || list.Items[0].Name != "seeded-api" {
+		t.Errorf("GET /deployments = %+v, want exactly the seeded deployment", list)
+	}
+
+	// Act four: one cancel stops both, and runServe waits for both.
 	cancel()
 	select {
 	case err := <-done:

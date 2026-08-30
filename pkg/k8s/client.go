@@ -242,22 +242,25 @@ func (c *Client) convertToDeploymentInfo(deployments []appsv1.Deployment) []Depl
 	result := make([]DeploymentInfo, 0, len(deployments))
 	now := time.Now()
 
-	for _, deployment := range deployments {
-		info := c.createDeploymentInfo(deployment, now)
-		result = append(result, info)
+	for i := range deployments {
+		result = append(result, NewDeploymentInfo(&deployments[i], now))
 	}
 
 	return result
 }
 
-// createDeploymentInfo creates a DeploymentInfo struct from a Kubernetes deployment.
-func (c *Client) createDeploymentInfo(deployment appsv1.Deployment, now time.Time) DeploymentInfo {
+// NewDeploymentInfo projects a Deployment onto the fields worth showing.
+//
+// A pure function on purpose: the CLI feeds it live API results and the HTTP
+// server feeds it informer cache entries, and both get the same projection.
+// Time is a parameter so tests need no clock.
+func NewDeploymentInfo(deployment *appsv1.Deployment, now time.Time) DeploymentInfo {
 	info := DeploymentInfo{
 		Name:      deployment.Name,
 		Namespace: deployment.Namespace,
 		CreatedAt: deployment.CreationTimestamp.Time,
 		Age:       now.Sub(deployment.CreationTimestamp.Time),
-		Images:    extractImages(&deployment),
+		Images:    extractImages(deployment),
 	}
 
 	// Extract replica information
