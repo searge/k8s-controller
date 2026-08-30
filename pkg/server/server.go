@@ -56,7 +56,8 @@ func New(port int, source DeploymentSource, logger zerolog.Logger) *Server {
 // knows nothing is still running, which is what makes a leak a test failure
 // rather than a suspicion.
 func (s *Server) Start(ctx context.Context) error {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		return fmt.Errorf("failed to listen on port %d: %w", s.port, err)
 	}
@@ -78,7 +79,10 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info().Msg("Context cancelled, shutting down HTTP server")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	// Derived from ctx but with its cancellation stripped: ctx is already done
+	// by the time we get here, and a shutdown context that inherited that state
+	// would expire instantly, turning every graceful shutdown into a hard drop.
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
 	if err := s.srv.ShutdownWithContext(shutdownCtx); err != nil {
 		return fmt.Errorf("http server shutdown failed: %w", err)

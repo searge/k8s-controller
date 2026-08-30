@@ -80,12 +80,15 @@ func TestEndpoints(t *testing.T) {
 		{"healthz is alive", synced, "/healthz", 200, `"ok"`},
 		{"healthz ignores sync state", unsynced, "/healthz", 200, `"ok"`},
 		{"readyz after sync", synced, "/readyz", 200, `"ok"`},
-		{"readyz before sync", unsynced, "/readyz", 503, "cache not synced"},
+		{"readyz before sync", unsynced, "/readyz", 503, `"error":"cache not synced"`},
 		{"deployments before sync refuse", unsynced, "/deployments", 503, "cache not synced yet"},
 		{"deployments after sync", synced, "/deployments", 200, `"count":2`},
 		{"deployments filtered by namespace", synced, "/deployments?namespace=other", 200, `"count":1`},
 		{"unknown path", synced, "/nope", 404, "not found"},
 	}
+
+	// Non-2xx responses share one shape: {"error": ...}. The readyz 503 used
+	// {"status": ...} at first, which forced clients into a second parser.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -189,6 +192,31 @@ func TestRequestIDsAreUnique(t *testing.T) {
 			t.Fatalf("request id %q repeated within %d requests", id, i+1)
 		}
 		seen[id] = true
+	}
+}
+
+// TestNonGETRejected pins the method gate: every endpoint is a read, so
+// anything but GET gets 405 with the Allow header RFC 9110 requires, before
+// route dispatch — a POST to /deployments must not reach the cache at all.
+func TestNonGETRejected(t *testing.T) {
+	source := &fakeSource{synced: true}
+
+	for _, method := range []string{"POST", "PUT", "DELETE", "PATCH"} {
+		t.Run(method, func(t *testing.T) {
+			var logBuf bytes.Buffer
+			ctx := do(source, method, "/deployments", &logBuf)
+
+			if got := ctx.Response.StatusCode(); got != 405 {
+				t.Errorf("%s /deployments = %d, want 405", method, got)
+			}
+			if allow := string(ctx.Response.Header.Peek("Allow")); allow != "GET" {
+				t.Errorf("Allow header = %q, want %q", allow, "GET")
+			}
+		})
+	}
+
+	if len(source.listedNS) != 0 {
+		t.Errorf("non-GET requests reached the cache: List called %d times", len(source.listedNS))
 	}
 }
 

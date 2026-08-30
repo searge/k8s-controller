@@ -30,7 +30,7 @@ Ready once the informer cache has synced with the cluster.
 | Status | Body | Meaning |
 | --- | --- | --- |
 | `200` | `{"status":"ok"}` | Cache synced; answers reflect the cluster |
-| `503` | `{"status":"cache not synced"}` | Still syncing, or the API server is unreachable |
+| `503` | `{"error":"cache not synced"}` | Still syncing, or the API server is unreachable |
 
 ### Deployments
 
@@ -65,7 +65,8 @@ deployments.
 
 ### Anything else
 
-Unknown paths return `404` with `{"error":"not found"}`.
+Unknown paths return `404` with `{"error":"not found"}`. Methods other than GET
+return `405` with an `Allow: GET` header.
 
 ```bash
 curl -i http://localhost:8080/healthz

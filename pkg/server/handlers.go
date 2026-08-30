@@ -16,6 +16,9 @@ import (
 	"github.com/Searge/k8s-controller/pkg/k8s"
 )
 
+// contentTypeJSON is the Content-Type every endpoint responds with.
+const contentTypeJSON = "application/json"
+
 // DeploymentSource is what the handlers read deployments from. In production it
 // is the informer's cache; in tests it is a fake. It is deliberately the only
 // path handlers have to cluster data -- there is no clientset to reach for, so
@@ -45,11 +48,19 @@ type errorBody struct {
 // without grepping by timestamp.
 func newHandler(source DeploymentSource, logger zerolog.Logger) fasthttp.RequestHandler {
 	routes := func(ctx *fasthttp.RequestCtx) {
+		// Every endpoint is a read; anything but GET is refused before dispatch,
+		// with the Allow header RFC 9110 requires alongside a 405.
+		if !ctx.IsGet() {
+			ctx.Response.Header.Set("Allow", "GET")
+			writeJSON(ctx, fasthttp.StatusMethodNotAllowed, errorBody{Error: "method not allowed"}, logger)
+			return
+		}
+
 		switch string(ctx.Path()) {
 		case "/healthz":
 			handleHealthz(ctx)
 		case "/readyz":
-			handleReadyz(ctx, source)
+			handleReadyz(ctx, source, logger)
 		case "/deployments":
 			handleDeployments(ctx, source, logger, time.Now())
 		default:
@@ -91,21 +102,21 @@ func newRequestID() string {
 // readiness, not liveness, or it gets restarted instead of waited for.
 func handleHealthz(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(fasthttp.StatusOK)
-	ctx.SetContentType("application/json")
+	ctx.SetContentType(contentTypeJSON)
 	ctx.SetBodyString(`{"status":"ok"}`)
 }
 
 // handleReadyz is readiness: 200 only once the informer cache has synced.
 // Before that the process is healthy but its answers would be arbitrary.
-func handleReadyz(ctx *fasthttp.RequestCtx, source DeploymentSource) {
+// The 503 carries the same {"error": ...} shape as every other non-2xx
+// response, so one parser covers the whole API.
+func handleReadyz(ctx *fasthttp.RequestCtx, source DeploymentSource, logger zerolog.Logger) {
 	if !source.HasSynced() {
-		ctx.SetStatusCode(fasthttp.StatusServiceUnavailable)
-		ctx.SetContentType("application/json")
-		ctx.SetBodyString(`{"status":"cache not synced"}`)
+		writeJSON(ctx, fasthttp.StatusServiceUnavailable, errorBody{Error: "cache not synced"}, logger)
 		return
 	}
 	ctx.SetStatusCode(fasthttp.StatusOK)
-	ctx.SetContentType("application/json")
+	ctx.SetContentType(contentTypeJSON)
 	ctx.SetBodyString(`{"status":"ok"}`)
 }
 
@@ -141,7 +152,7 @@ func handleDeployments(ctx *fasthttp.RequestCtx, source DeploymentSource, logger
 // writeJSON marshals body into the response with the given status.
 func writeJSON(ctx *fasthttp.RequestCtx, status int, body any, logger zerolog.Logger) {
 	ctx.SetStatusCode(status)
-	ctx.SetContentType("application/json")
+	ctx.SetContentType(contentTypeJSON)
 	if err := json.NewEncoder(ctx).Encode(body); err != nil {
 		logger.Error().Err(err).Msg("Failed to encode JSON response")
 	}
