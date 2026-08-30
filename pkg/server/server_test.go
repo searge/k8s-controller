@@ -1,23 +1,26 @@
 // Package server contains tests for the HTTP server functionality.
-// This file tests the server's HTTP handlers and routing logic.
+// This file tests the HTTP handlers and the context-bound server lifecycle.
 package server
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/valyala/fasthttp"
-	"github.com/valyala/fasthttp/fasthttputil"
 )
 
 // HelloMessage is the default message returned by the server.
 const HelloMessage = "Hello from k8s-controller!"
+
+// startTimeout bounds every wait in these tests: long enough for a slow machine,
+// short enough that a hang fails the run instead of stalling it.
+const startTimeout = 5 * time.Second
 
 // TestCreateHandler tests the HTTP request routing and response generation
 // for all supported endpoints. It directly tests the handler function
@@ -91,196 +94,133 @@ func TestCreateHandler(t *testing.T) {
 	}
 }
 
-// TestStart tests the Start function.
-func TestStart(t *testing.T) {
-	t.Run("start server with valid port", func(t *testing.T) {
-		// Find an available port. Bound to loopback rather than every
-		// interface -- the listener only exists to learn a free port number.
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("Failed to find available port: %v", err)
+// startServer runs a Server on an OS-assigned port and waits until it is bound.
+// It returns the base URL and a stop function that cancels the server and
+// asserts Start returned cleanly — which is the leak check every test gets for
+// free by using this helper.
+func startServer(t *testing.T) (string, func()) {
+	t.Helper()
+
+	srv := New(0, zerolog.New(&bytes.Buffer{}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Start(ctx) }()
+
+	deadline := time.Now().Add(startTimeout)
+	for srv.Addr() == "" {
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatal("server did not bind a port within the timeout")
 		}
-		port := listener.Addr().(*net.TCPAddr).Port
-		if err := listener.Close(); err != nil {
-			t.Fatalf("Failed to close listener: %v", err)
-		}
+		time.Sleep(2 * time.Millisecond)
+	}
 
-		// Create a logger
-		var logBuf bytes.Buffer
-		logger := zerolog.New(&logBuf).With().Timestamp().Logger()
+	// The server binds every interface, so Addr() reports "[::]:PORT" — not an
+	// address a client can dial. Take the port and aim at loopback instead.
+	_, port, err := net.SplitHostPort(srv.Addr())
+	if err != nil {
+		cancel()
+		t.Fatalf("unexpected listen address %q: %v", srv.Addr(), err)
+	}
 
-		// Start server in goroutine
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- Start(port, logger)
-		}()
-
-		// Give server time to start
-		time.Sleep(50 * time.Millisecond)
-
-		// Test that server is running by making a request
-		client := &fasthttp.Client{
-			ReadTimeout:  time.Second,
-			WriteTimeout: time.Second,
-		}
-
-		req := fasthttp.AcquireRequest()
-		resp := fasthttp.AcquireResponse()
-		defer fasthttp.ReleaseRequest(req)
-		defer fasthttp.ReleaseResponse(resp)
-
-		req.SetRequestURI(fmt.Sprintf("http://localhost:%d/health", port))
-		req.Header.SetMethod("GET")
-
-		err = client.Do(req, resp)
-		if err != nil {
-			t.Fatalf("Failed to make request to running server: %v", err)
-		}
-
-		if resp.StatusCode() != 200 {
-			t.Errorf("Expected status 200, got %d", resp.StatusCode())
-		}
-
-		// Verify log output contains startup message
-		logOutput := logBuf.String()
-		expectedLog := fmt.Sprintf("Starting HTTP server on :%d", port)
-		if !strings.Contains(logOutput, expectedLog) {
-			t.Errorf("Expected log to contain %q, got %q", expectedLog, logOutput)
-		}
-
-		// Check that no error occurred yet
+	stop := func() {
+		cancel()
 		select {
-		case err := <-errCh:
-			t.Errorf("Server returned unexpected error: %v", err)
-		default:
-			// No error yet, which is expected
+		case err := <-done:
+			if err != nil {
+				t.Errorf("Start() returned error after cancellation: %v", err)
+			}
+		case <-time.After(startTimeout):
+			t.Error("Start() did not return after cancellation: serve goroutine leaked")
 		}
-	})
+	}
+
+	return "http://127.0.0.1:" + port, stop
 }
 
-// testCase represents a single test case for server endpoint testing.
-type testCase struct {
-	name           string
-	path           string
-	expectedStatus int
-	expectedBody   string
-}
+// get performs one HTTP GET against a running server.
+func get(t *testing.T, url string) (int, string, error) {
+	t.Helper()
 
-// setupInMemoryServer creates and starts an in-memory server for testing.
-// It returns a cleanup function that should be called when done.
-func setupInMemoryServer(t *testing.T) (*fasthttp.Client, func()) {
-	// Create in-memory listener for testing
-	ln := fasthttputil.NewInmemoryListener()
-
-	// Start server using our actual handler logic
-	go func() {
-		// Create a test logger that writes to stderr
-		logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-		handler := createHandler(logger)
-		if err := fasthttp.Serve(ln, handler); err != nil {
-			t.Errorf("Failed to serve: %v", err)
-		}
-	}()
-
-	// Give server time to start
-	time.Sleep(10 * time.Millisecond)
-
-	// Create client with custom dialer for in-memory connection
 	client := &fasthttp.Client{
-		Dial: func(_ string) (net.Conn, error) {
-			return ln.Dial()
-		},
+		ReadTimeout:  time.Second,
+		WriteTimeout: time.Second,
 	}
 
-	cleanup := func() {
-		if err := ln.Close(); err != nil {
-			t.Errorf("Failed to close listener: %v", err)
-		}
-	}
-
-	return client, cleanup
-}
-
-// executeTestRequest executes a single HTTP request and verifies the response.
-func executeTestRequest(t *testing.T, client *fasthttp.Client, tc testCase) {
-	// Prepare HTTP request
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
 
-	req.SetRequestURI(tc.path)
+	req.SetRequestURI(url)
 	req.Header.SetMethod("GET")
-	req.Header.SetHost("localhost") // FastHTTP requires Host header
 
-	// Execute the request
-	err := client.Do(req, resp)
+	if err := client.Do(req, resp); err != nil {
+		return 0, "", err
+	}
+	return resp.StatusCode(), string(resp.Body()), nil
+}
+
+// TestServerServesUntilCancelled covers the whole lifecycle: bind, serve a real
+// request over TCP, shut down on cancel, and release the port.
+func TestServerServesUntilCancelled(t *testing.T) {
+	url, stop := startServer(t)
+
+	status, body, err := get(t, url+"/health")
 	if err != nil {
-		t.Fatalf("Failed to make request: %v", err)
+		t.Fatalf("GET /health against running server: %v", err)
+	}
+	if status != 200 || body != `{"status":"ok"}` {
+		t.Errorf("GET /health = %d %q, want 200 with ok body", status, body)
 	}
 
-	// Verify response status code
-	if resp.StatusCode() != tc.expectedStatus {
-		t.Errorf("Expected status %d, got %d", tc.expectedStatus, resp.StatusCode())
+	stop()
+
+	// The port must be free again: shutdown that leaves the listener bound is
+	// exactly the defect the old ListenAndServe path had.
+	addr := strings.TrimPrefix(url, "http://")
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatalf("port still bound after shutdown: %v", err)
+	}
+	if err := ln.Close(); err != nil {
+		t.Errorf("failed to close probe listener: %v", err)
 	}
 
-	// Verify response body content
-	body := string(resp.Body())
-	if body != tc.expectedBody {
-		t.Errorf("Expected body %q, got %q", tc.expectedBody, body)
-	}
-}
-
-// TestServerHandlers tests the HTTP request routing and response generation
-// for all supported endpoints. It uses an in-memory listener to avoid
-// binding to real network ports during testing.
-func TestServerHandlers(t *testing.T) {
-	tests := []testCase{
-		{
-			name:           "health endpoint",
-			path:           "/health",
-			expectedStatus: 200,
-			expectedBody:   `{"status":"ok"}`,
-		},
-		{
-			name:           "default endpoint",
-			path:           "/",
-			expectedStatus: 200,
-			expectedBody:   HelloMessage,
-		},
-		{
-			name:           "unknown endpoint",
-			path:           "/unknown",
-			expectedStatus: 200,
-			expectedBody:   HelloMessage,
-		},
-	}
-
-	// Setup in-memory server once for all tests
-	client, cleanup := setupInMemoryServer(t)
-	defer cleanup()
-
-	// Run all test cases
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			executeTestRequest(t, client, tc)
-		})
+	if _, _, err := get(t, url+"/health"); err == nil {
+		t.Error("server still answering after shutdown")
 	}
 }
 
-// ExampleStart demonstrates how to start the HTTP server.
-// This example shows the basic usage of the Start function with
-// a logger and port configuration.
-func ExampleStart() {
-	// This example shows how to start the server
-	// Note: In real usage, this would block until the server stops
+// TestServerListenFailure makes sure a port that cannot be bound surfaces as an
+// error from Start rather than as a log line and a hung process.
+func TestServerListenFailure(t *testing.T) {
+	url, stop := startServer(t)
+	defer stop()
 
-	// Start server on port 8080
-	// err := Start(8080, logger)
-	// if err != nil {
-	//     log.Fatal(err)
-	// }
+	// A second server on the same port must fail to listen.
+	addr := strings.TrimPrefix(url, "http://")
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("unexpected addr %q: %v", addr, err)
+	}
 
-	fmt.Println("Server would start on :8080")
-	// Output: Server would start on :8080
+	var port int
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		t.Fatalf("unexpected port %q: %v", portStr, err)
+	}
+
+	second := New(port, zerolog.New(&bytes.Buffer{}))
+	if err := second.Start(context.Background()); err == nil {
+		t.Error("Start() on an occupied port returned nil, want an error")
+	}
+}
+
+// TestAddrBeforeStart pins the "not started yet" contract.
+func TestAddrBeforeStart(t *testing.T) {
+	srv := New(0, zerolog.New(&bytes.Buffer{}))
+	if got := srv.Addr(); got != "" {
+		t.Errorf(`Addr() before Start = %q, want ""`, got)
+	}
 }
