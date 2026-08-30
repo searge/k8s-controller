@@ -21,8 +21,9 @@ controllers](https://fwdays.com/event/kubernetes-controllers-course), taught by 
 implementation](https://github.com/den-vasyliev/k8s-controller-tutorial-ref) runs to fourteen step
 branches. The course's mechanisms are the architecture here; what they are pointed at is different.
 
-**Step 6 of 14.** The CLI, structured logging, the HTTP server and `list deployments` through
-client-go all work. Informers, reconciliation and controller-runtime are not started yet.
+**Step 8 of 14.** The CLI, structured logging, `list deployments` through client-go, a cached
+Deployment informer, and an HTTP server that answers from that cache. Plugins, reconciliation and
+controller-runtime are not started yet.
 
 ## Documentation
 
@@ -32,9 +33,9 @@ deliberately kept out of this repository.
 | Document | What is in it |
 | --- | --- |
 | [docs/COURSE.md](docs/COURSE.md) | Which course steps are done, and where this diverges from the reference implementation |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones, effort estimates, known defects left unfixed on purpose |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | What comes next, effort estimates, known defects left unfixed on purpose |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Current and target layout, package boundaries, testing strategy |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Numbered decisions with reasoning and rejected alternatives |
+| [docs/decisions/](docs/decisions/) | Numbered decisions with reasoning and rejected alternatives |
 | [docs/backup-check.md](docs/backup-check.md) | First domain: Longhorn object graph, the join, what the assertion does not claim |
 | [docs/api.md](docs/api.md) | HTTP endpoints and CLI commands as they exist today |
 | [docs/CODING_GUIDELINES.md](docs/CODING_GUIDELINES.md) | Rules, quick reference |

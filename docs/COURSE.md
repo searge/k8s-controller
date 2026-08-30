@@ -1,8 +1,8 @@
 # Course mapping
 
 This repository is an implementation of the FWDays crash course on Kubernetes controllers. This
-file maps the course's implementation steps onto the state of the code, and onto the milestones in
-[ROADMAP.md](ROADMAP.md).
+file maps the course's implementation steps onto the state of the code. The plan built around them
+is in [ROADMAP.md](ROADMAP.md).
 
 No course material is reproduced here. Links point at the course page and the instructors'
 reference implementation.
@@ -29,17 +29,17 @@ They are easy to confuse, and earlier notes for this project mixed them.
 | 4 | `feature/step4-fasthttp-server` | HTTP server | Done — `pkg/server`, `cmd/serve.go` |
 | 5 | `feature/step5-makefile-docker-ci` | Build, container, CI | Done, and then some — Taskfile instead of Make, plus release automation and provisioning that the course does not ask for |
 | 6 | `feature/step6-list-deployments` | client-go, list resources | Done — `pkg/k8s/client.go` |
-| 7 | `feature/step7-informer` | Informer and cache | In progress — watches `Deployment`, per decision 014's note on staying unblocked |
-| 8 | `feature/step8-api-handler` | Serve from cache | Not started |
+| 7 | `feature/step7-informer` | Informer and cache | Done — `internal/informer`, wired into `serve` under one signal context |
+| 8 | `feature/step8-api-handler` | Serve from cache | Done — `/deployments` from the cache, `/healthz` and `/readyz` |
 | 9 | `feature/step9-controller-runtime` | Manager, reconciler | Not started |
 | 10 | `feature/step10-leader-election` | Leader election, metrics | Not started — leader election is required here, not optional (decision 019) |
 | 11 | `feature/step11-frontendpage-crd` | Custom resource and reconcile | Not started — the resource here is `Check`, not `FrontendPage` (decision 019) |
 | 12 | `feature/step12-platform-api` | API layer over the resource | Not started — lands as a Go package, not an HTTP service (decision 015) |
-| 13 | `feature/step13-mcp-integration` | MCP server over the API | Not started — the reference handlers are partly stubs; do not inherit the TODOs |
-| 14 | `feature/step14-jwt-auth` | Authentication on the API | Not started — legitimate because an agent is network-reachable (decision 016) |
+| 13 | `feature/step13-mcp-integration` | MCP server over the API | Not started — on `modelcontextprotocol/go-sdk`, not the reference's pin (decision 023) |
+| 14 | `feature/step14-jwt-auth` | Authentication on the API | Not started — ServiceAccount tokens verified by TokenReview, not the reference's shared secret (decision 024) |
 
-Step 5 is where this repository diverged furthest from the course, and decision 013 in
-[DECISIONS.md](DECISIONS.md) is a direct response to that.
+Step 5 is where this repository diverged furthest from the course, and
+[decision 013](decisions/013-supporting-tooling-is-frozen.md) is a direct response to that.
 
 ## What the course does not teach
 
@@ -56,21 +56,22 @@ Checked against `feature/step14-jwt-auth`, the furthest branch:
 Worth knowing rather than copying: the final branch commits `coverage.out`, `coverage.xml` and
 `report.xml` into git.
 
-## Where the milestones diverge from the reference
+## Where this diverges from the reference
 
 The reference implementation demonstrates each step against `Deployment`, which is the right
 choice for a tutorial: the resource is familiar and the exercise stays focused on the mechanism.
 
-This repository lands the same steps on a different resource set — PVCs and Longhorn's backup
-resources — so that finishing step 10 produces something with a reason to keep running. The
-mechanisms exercised are the same ones: shared informers, cache-sync gating, work queues, a
-custom resource with status conditions, RBAC, leader election, metrics, `envtest`.
+This repository lands the same steps on a general cluster interrogation tool, so that finishing the
+course produces something with a reason to keep running. The mechanisms exercised are the same
+ones: shared informers, cache-sync gating, work queues, a custom resource with status conditions,
+RBAC, leader election, metrics, `envtest`. What they are pointed at is a plugin registry rather
+than one hard-coded domain (decisions 014 and 018).
 
 One thing that substitution costs, and how it is paid for: a read-only checker never exercises
 finalizers, owner references or garbage collection. Milestone 6 exists specifically to cover
 them, by creating owned Jobs. See decision 010.
 
-## Lectures against milestones
+## Lectures against the work
 
 Approximate, since lecture topics and implementation steps do not line up one-to-one.
 
@@ -78,9 +79,9 @@ Approximate, since lecture topics and implementation steps do not line up one-to
 | --- | --- | --- |
 | 1 | Kubernetes API, control plane, reconciliation | Background for everything; the provisioning in `ansible/` came from here |
 | 2 | Go fundamentals, CLI, HTTP server | Steps 1–4, all done |
-| 3 | client-go, informers, serialisation | Step 6 done, steps 7–8 are milestones 2–3 |
-| 4 | controller-runtime, manager, reconciler, leader election | Steps 9–10, milestones 4–5 |
-| 5 | Custom resources, admission control, testing, observability | Milestones 4–6 |
+| 3 | client-go, informers, serialisation | Steps 6, 7 and 8 all done |
+| 4 | controller-runtime, manager, reconciler, leader election | Steps 9 and 10, both pending |
+| 5 | Custom resources, admission control, testing, observability | Steps 11 onward |
 | 6 | Platform integration, agent interfaces | Out of scope for this repository |
 
 ## Personal course notes

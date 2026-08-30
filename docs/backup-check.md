@@ -4,7 +4,7 @@
 > **No longer the project's purpose — kept as the design for a future Longhorn plugin.**
 > On 2026-08-05 the project settled on being a general cluster interrogation tool with the course
 > mechanisms as its spine and every question answered by a plugin
-> ([DECISIONS.md](DECISIONS.md) 014). Longhorn is one such plugin, and it is not the first one.
+> ([decision 014](decisions/014-kc-is-a-cluster-interrogation-tool.md)). Longhorn is one such plugin, and it is not the first one.
 >
 > The findings below are worth keeping and were verified against a live cluster: the join key trap,
 > the join direction, `status.labels.KubernetesStatus` being history, and the `RecurringJob`

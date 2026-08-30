@@ -10,8 +10,8 @@ New to the project, in this order:
    known and deliberately unfixed.
 3. **[ARCHITECTURE.md](ARCHITECTURE.md)** — current layout, target layout, package boundaries,
    testing strategy per layer.
-4. **[DECISIONS.md](DECISIONS.md)** — numbered decisions with reasoning, including rejected
-   options.
+4. **[decisions/](decisions/)** — numbered decisions with reasoning, including rejected options.
+   One file each; the index lists them all.
 5. **[backup-check.md](backup-check.md)** — the first domain: Longhorn's object graph, the join,
    and what the assertion does and does not claim.
 
@@ -56,8 +56,8 @@ and the private record keeps the rest.
 
 - Prose style: no emoji in technical documentation, no numbered headings, no decorative emphasis.
   `CODING_GUIDELINES.md` holds rules and `BEST_PRACTICES.md` holds the examples; keep that split.
-- New decisions append to `DECISIONS.md` with the next number and a date. Do not renumber or
-  delete an entry — mark it `superseded by NNN`, since the point of the file is that a rejected
-  option is not proposed again as if it were new.
+- New decisions get the next number and their own file under `decisions/`, plus a row in that
+  directory's index. Do not renumber or delete one — mark it `superseded by NNN`, since the point
+  of the log is that a rejected option is not proposed again as if it were new.
 - A new domain gets its own file next to `backup-check.md`. Split into a subdirectory once there
   are three of them.
