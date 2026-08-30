@@ -2,53 +2,76 @@
 
 ## HTTP Endpoints
 
-The k8s-controller provides a simple HTTP API for health checking and basic operations.
+`serve` runs the HTTP server beside a deployment informer. Handlers read the
+informer's cache and never call the Kubernetes API themselves; readiness is
+therefore a statement about the cache, not about the process.
 
-### Health Check
+Every response carries an `X-Request-ID` header, and the matching value appears
+as `request_id` in the request log line.
 
-**Endpoint:** `GET /health`
+### Liveness
 
-**Description:** Returns the health status of the application.
+**Endpoint:** `GET /healthz`
 
-**Response:**
+The process is up and serving. Deliberately ignores the cache: a pod that is
+alive but not yet ready must fail readiness, not liveness, or it gets restarted
+instead of waited for.
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| `200` | `{"status":"ok"}` | Always, while the process serves |
+
+### Readiness
+
+**Endpoint:** `GET /readyz`
+
+Ready once the informer cache has synced with the cluster.
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| `200` | `{"status":"ok"}` | Cache synced; answers reflect the cluster |
+| `503` | `{"error":"cache not synced"}` | Still syncing, or the API server is unreachable |
+
+### Deployments
+
+**Endpoint:** `GET /deployments[?namespace=<name>]`
+
+Deployments from the informer cache. Without `namespace`, all namespaces the
+informer watches. Refuses with `503` until the cache has synced, because an
+empty answer from an unsynced cache is indistinguishable from a cluster with no
+deployments.
 
 ```json
 {
-  "status": "ok"
+  "items": [
+    {
+      "name": "example",
+      "namespace": "default",
+      "replicas": {"desired": 3, "available": 3, "ready": 3, "updated": 3},
+      "age": 86400000000000,
+      "images": ["nginx:1.27"],
+      "created_at": "2026-08-01T10:00:00Z"
+    }
+  ],
+  "count": 1
 }
 ```
 
-**Status Codes:**
+| Status | Meaning |
+| --- | --- |
+| `200` | List served from the cache |
+| `503` | Cache not synced yet |
+| `500` | Cache read failed; details go to the log, not the client |
 
-- `200 OK` - Service is healthy
+### Anything else
 
-**Example:**
-
-```bash
-curl http://localhost:8080/health
-```
-
-### Default Endpoint
-
-**Endpoint:** `GET /*` (all other paths)
-
-**Description:** Returns a default greeting message.
-
-**Response:**
-
-```text
-Hello from k8s-controller!
-```
-
-**Status Codes:**
-
-- `200 OK` - Request processed successfully
-
-**Example:**
+Unknown paths return `404` with `{"error":"not found"}`. Methods other than GET
+return `405` with an `Allow: GET` header.
 
 ```bash
-curl http://localhost:8080/
-curl http://localhost:8080/any-path
+curl -i http://localhost:8080/healthz
+curl -i http://localhost:8080/readyz
+curl -s 'http://localhost:8080/deployments?namespace=default' | jq .
 ```
 
 ## CLI Commands
@@ -57,11 +80,10 @@ curl http://localhost:8080/any-path
 
 - `--log-level string` - Set logging level (debug, info, warn, error, fatal, panic) (default "info")
 
-### Commands
+### serve
 
-#### serve
-
-Start the HTTP server.
+Start the HTTP server and the deployment informer under one lifecycle. Both
+stop together on SIGINT or SIGTERM. Requires cluster access.
 
 ```bash
 k8s-controller serve [flags]
@@ -70,66 +92,47 @@ k8s-controller serve [flags]
 **Flags:**
 
 - `--port int` - Port to run the server on (default 8080)
+- `--kubeconfig string` - Path to kubeconfig (default: `$KUBECONFIG` or `~/.kube/config`)
+- `--context string` - Kubeconfig context (default: current context)
 
-**Examples:**
+### list deployments
+
+List deployments with a live API call (no cache, no informer).
 
 ```bash
-# Start server on default port 8080
-k8s-controller serve
-
-# Start server on custom port with debug logging
-k8s-controller serve --port=9090 --log-level=debug
+k8s-controller list deployments [flags]
 ```
 
-#### version
+**Flags:**
 
-Print the version number of k8s-controller.
+- `-n, --namespace string` - Namespace (default: all namespaces)
+- `-o, --output string` - Output format: table, json, yaml (default "table")
+- `-l, --selector string` - Label selector
+- `--kubeconfig string`, `--context string` - As in serve
+- `--timeout int` - Timeout in seconds (default 30)
+
+### version
+
+Print the version number.
 
 ```bash
 k8s-controller version
 ```
 
-**Example output:**
+## Logging
 
-```bash
-k8s-controller version v0.1.0
-```
+Structured logging with [zerolog](https://github.com/rs/zerolog), written to
+stderr in console format. client-go's own log output (klog) is routed through
+the same logger, so reflector and cache-sync failures appear as structured
+lines rather than as raw klog text.
 
-## Configuration
-
-### Environment Variables
-
-Currently, the application doesn't use environment variables for configuration. All configuration is done via CLI flags.
-
-### Logging
-
-The application uses structured logging with [zerolog](https://github.com/rs/zerolog). Log levels can be configured using the `--log-level` flag.
-
-Available log levels:
-
-- `debug` - Detailed debug information
-- `info` - General information (default)
-- `warn` - Warning messages
-- `error` - Error messages
-- `fatal` - Fatal errors (application exits)
-- `panic` - Panic-level errors (application panics)
-
-### Server Configuration
-
-- **Port**: Configurable via `--port` flag (default: 8080)
-- **Bind Address**: Currently binds to all interfaces (0.0.0.0)
-- **Protocol**: HTTP (HTTPS not yet implemented)
+HTTP requests are logged after completion with `request_id`, `method`, `path`,
+`status` and `duration`.
 
 ## Error Handling
 
-### HTTP Errors
-
-Currently, the server doesn't return specific HTTP error codes for client errors. All endpoints return 200 OK for valid requests.
-
-### CLI Errors
-
-- Exit code 1 - Command execution failed or server startup failed
-- Exit code 0 - Successful execution
+- Non-2xx HTTP responses carry `{"error": "..."}`; internal details stay in the log.
+- CLI exit code 1 on failure, 0 on success.
 
 ## Security Considerations
 
@@ -141,13 +144,3 @@ Currently, the server doesn't return specific HTTP error codes for client errors
 - Has no rate limiting
 
 Do not use in production without proper security measures.
-
-## Future Enhancements
-
-This documentation will be updated as new features are added:
-
-- Kubernetes client integration
-- Authentication and authorization
-- HTTPS support
-- Metrics endpoints
-- Custom resource management

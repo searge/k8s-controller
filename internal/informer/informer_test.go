@@ -212,6 +212,36 @@ func TestHasSyncedGatesReads(t *testing.T) {
 	}
 }
 
+// TestRunCancelledDuringSyncIsClean pins the shutdown-versus-failure distinction:
+// a context that dies before the initial sync completes is a shutdown, so Run
+// returns nil rather than a sync error. Found by the serve lifecycle test, where a
+// fast cancel raced the initial sync and runServe reported a spurious failure.
+func TestRunCancelledDuringSyncIsClean(t *testing.T) {
+	client, _ := newWatchedFakeClient()
+
+	w, err := NewDeploymentWatcher(client, Config{}, testLogger())
+	if err != nil {
+		t.Fatalf("NewDeploymentWatcher() error = %v", err)
+	}
+
+	// Cancelled before Run starts: the sync can never complete, which is the
+	// deterministic version of "the signal arrived first".
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- w.Run(ctx) }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Run() on a pre-cancelled context = %v, want nil (shutdown, not failure)", err)
+		}
+	case <-time.After(syncTimeout):
+		t.Error("Run() did not return on a pre-cancelled context")
+	}
+}
+
 // TestWaitForSyncRespectsCancellation makes sure a cancelled context ends the wait
 // rather than blocking forever. An informer whose watch never establishes must not
 // hang the process that is waiting on it.

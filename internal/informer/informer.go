@@ -119,7 +119,17 @@ func (w *DeploymentWatcher) Run(ctx context.Context) error {
 
 	w.factory.Start(ctx.Done())
 
-	if err := w.WaitForSync(ctx); err != nil {
+	// Cancellation during the initial sync is a shutdown, not a failure: a
+	// SIGTERM that lands while the watch is still establishing must end the
+	// process cleanly, the same as one that lands an hour later. Checked
+	// before the sync error so the two cases stay distinct branches.
+	err := w.WaitForSync(ctx)
+	if ctx.Err() != nil {
+		w.factory.Shutdown()
+		w.logger.Info().Msg("Cancelled during initial sync, deployment informer stopped")
+		return nil
+	}
+	if err != nil {
 		return err
 	}
 
