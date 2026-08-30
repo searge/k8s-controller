@@ -15,24 +15,19 @@ var logLevel string
 // such as logging setup that applies to all subcommands.
 var rootCmd = &cobra.Command{
 	Use:   "k8s-controller",
-	Short: "A production-grade Golang Kubernetes controller",
-	Long: `This project is a step-by-step tutorial for DevOps and SRE engineers
-to learn about building Golang applications and Kubernetes controllers.
-Each step is implemented as a feature branch and includes
-a README section with explanations and command history
+	Short: "Read-only Kubernetes cluster interrogation",
+	Long: `Ask a Kubernetes cluster questions that are awkward to answer with kubectl,
+and serve a cached view of cluster state over HTTP.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	PersistentPreRun: func(cmd *cobra.Command, _ []string) {
-		// Skip logging for version command - it should be clean output
-		if cmd.Use == "version" {
-			return
-		}
-
-		// Initialize logger with the specified log level
+Read-only: the only cluster access is list and watch. Built step by step
+alongside the FWDays course on Kubernetes controllers; the plan and the
+decisions behind it live in docs/ in the repository.`,
+	// Logger configuration only. The startup banner that used to live here
+	// printed a log line before the output of help, version and every other
+	// command that produces no logs of its own; commands that do real work
+	// announce themselves instead (serve logs its port and informer).
+	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		logger.Init(logLevel)
-		log.Info().Str("version", Version).Msg("Starting k8s-controller")
 	},
 	Run: func(cmd *cobra.Command, _ []string) {
 		// If no subcommand is specified, show help

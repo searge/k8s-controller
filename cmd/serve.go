@@ -61,7 +61,9 @@ Examples:
 		}
 		defer closeClient(client)
 
-		log.Info().Int("port", serverPort).Msg("Starting serve")
+		// The one startup banner: long-running, so version and port belong in
+		// the log. One-shot commands stay silent unless they have something to say.
+		log.Info().Str("version", Version).Int("port", serverPort).Msg("Starting serve")
 		if err := runServe(ctx, client.GetClientset(), serverPort); err != nil {
 			log.Error().Err(err).Msg("Serve exited with error")
 			os.Exit(1)
